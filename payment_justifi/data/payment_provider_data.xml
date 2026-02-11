@@ -9,9 +9,6 @@
             <field name="sequence">100</field>
             <field name="state">disabled</field>
             <field name="is_published">False</field>
-            <field name="allow_tokenization">False</field>
-            <field name="capture_manually">False</field>
-            <field name="allow_express_checkout">False</field>
             <field name="pre_msg">
                 <![CDATA[<p>Pay securely with your credit or debit card via JustiFi.</p>]]>
             </field>
@@ -24,15 +21,6 @@
             <field name="cancel_msg">
                 <![CDATA[<p>Your payment has been cancelled.</p>]]>
             </field>
-        </record>
-
-        <!-- Card Payment Method for JustiFi -->
-        <record id="payment_method_justifi_card" model="payment.method">
-            <field name="name">Card</field>
-            <field name="code">card</field>
-            <field name="sequence">10</field>
-            <field name="active">True</field>
-            <field name="provider_ids" eval="[(4, ref('payment_provider_justifi'))]"/>
         </record>
 
     </data>
