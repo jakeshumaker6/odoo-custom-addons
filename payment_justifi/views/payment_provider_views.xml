@@ -1,0 +1,62 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- JustiFi Provider Form View -->
+    <record id="payment_provider_form_justifi" model="ir.ui.view">
+        <field name="name">payment.provider.form.justifi</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <group name="provider_credentials" position="inside">
+                <!-- JustiFi Credentials -->
+                <group string="JustiFi Credentials"
+                       name="justifi_credentials"
+                       invisible="code != 'justifi'">
+                    <field name="justifi_client_id"
+                           string="Client ID"
+                           placeholder="Your JustiFi Client ID"
+                           required="code == 'justifi'"/>
+                    <field name="justifi_client_secret"
+                           string="Client Secret"
+                           password="True"
+                           placeholder="Your JustiFi Client Secret"
+                           required="code == 'justifi'"/>
+                    <field name="justifi_account_id"
+                           string="Sub-Account ID"
+                           placeholder="acc_..."
+                           required="code == 'justifi'"/>
+                    <field name="justifi_payment_method_group_id"
+                           string="Payment Method Group ID"
+                           placeholder="pmg_..."/>
+                    <field name="justifi_webhook_secret"
+                           string="Webhook Secret"
+                           password="True"
+                           placeholder="Optional: For webhook signature verification"/>
+                </group>
+            </group>
+        </field>
+    </record>
+
+    <!-- Help text for JustiFi configuration -->
+    <record id="payment_provider_form_justifi_help" model="ir.ui.view">
+        <field name="name">payment.provider.form.justifi.help</field>
+        <field name="model">payment.provider</field>
+        <field name="inherit_id" ref="payment.payment_provider_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//div[@name='provider_state_pending']" position="after">
+                <div class="alert alert-info" role="alert"
+                     invisible="code != 'justifi' or state != 'disabled'">
+                    <strong>JustiFi Setup Instructions:</strong>
+                    <ol class="mb-0">
+                        <li>Get your API credentials from the <a href="https://app.justifi.ai" target="_blank">JustiFi Dashboard</a> under Developer → API Keys</li>
+                        <li>Find your Sub-Account ID under Accounts (starts with acc_)</li>
+                        <li>Optionally, create a Payment Method Group and enter its ID (starts with pmg_)</li>
+                        <li>Set up a webhook pointing to: <code>[your-odoo-url]/payment/justifi/webhook</code></li>
+                        <li>Enable the provider by setting the state to "Test" or "Enabled"</li>
+                    </ol>
+                </div>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>
