@@ -37,26 +37,4 @@
         </field>
     </record>
 
-    <!-- Help text for JustiFi configuration -->
-    <record id="payment_provider_form_justifi_help" model="ir.ui.view">
-        <field name="name">payment.provider.form.justifi.help</field>
-        <field name="model">payment.provider</field>
-        <field name="inherit_id" ref="payment.payment_provider_form"/>
-        <field name="arch" type="xml">
-            <xpath expr="//div[@name='provider_state_pending']" position="after">
-                <div class="alert alert-info" role="alert"
-                     invisible="code != 'justifi' or state != 'disabled'">
-                    <strong>JustiFi Setup Instructions:</strong>
-                    <ol class="mb-0">
-                        <li>Get your API credentials from the <a href="https://app.justifi.ai" target="_blank">JustiFi Dashboard</a> under Developer → API Keys</li>
-                        <li>Find your Sub-Account ID under Accounts (starts with acc_)</li>
-                        <li>Optionally, create a Payment Method Group and enter its ID (starts with pmg_)</li>
-                        <li>Set up a webhook pointing to: <code>[your-odoo-url]/payment/justifi/webhook</code></li>
-                        <li>Enable the provider by setting the state to "Test" or "Enabled"</li>
-                    </ol>
-                </div>
-            </xpath>
-        </field>
-    </record>
-
 </odoo>
