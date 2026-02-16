@@ -319,12 +319,12 @@ class PaymentProvider(models.Model):
 
         checkout_id = checkout['id']
 
-        # Find the pending transaction for this payment and store checkout_id
-        # Use a broader search first, then narrow down
+        # Try to find the pending transaction for this payment and store checkout_id
+        # Note: In some Odoo flows, the transaction may not exist yet when form renders
         _logger.info("JustiFi: Looking for transaction with provider_id=%s, amount=%s, currency=%s",
                      self.id, amount, currency.id)
 
-        # First try exact match
+        # First try exact match with amount
         tx = self.env['payment.transaction'].sudo().search([
             ('provider_id', '=', self.id),
             ('amount', '=', amount),
@@ -333,21 +333,31 @@ class PaymentProvider(models.Model):
             ('provider_reference', '=', False),
         ], order='id desc', limit=1)
 
-        # If not found, try without amount (in case of float precision issues)
+        # Try without amount restriction
         if not tx:
-            _logger.info("JustiFi: Exact match not found, trying broader search")
             tx = self.env['payment.transaction'].sudo().search([
                 ('provider_id', '=', self.id),
-                ('currency_id', '=', currency.id),
                 ('state', 'in', ['draft', 'pending']),
+                ('provider_reference', '=', False),
+            ], order='id desc', limit=1)
+
+        # Try any non-completed transaction
+        if not tx:
+            tx = self.env['payment.transaction'].sudo().search([
+                ('provider_id', '=', self.id),
+                ('state', 'not in', ['done', 'cancel', 'error']),
                 ('provider_reference', '=', False),
             ], order='id desc', limit=1)
 
         if tx:
             tx.provider_reference = checkout_id
-            _logger.info("JustiFi: Stored checkout_id %s in transaction %s", checkout_id, tx.reference)
+            _logger.info("JustiFi: Stored checkout_id %s in transaction %s (state=%s)",
+                        checkout_id, tx.reference, tx.state)
         else:
-            _logger.warning("JustiFi: No pending transaction found to store checkout_id %s", checkout_id)
+            # This is OK - the transaction may be created after form renders
+            # We'll link it via fallback in the complete handler
+            _logger.info("JustiFi: No transaction found yet for checkout_id %s (will link on completion)",
+                        checkout_id)
 
         # Get web component token
         auth_token = self._justifi_get_web_component_token(checkout_id)

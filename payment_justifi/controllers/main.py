@@ -66,21 +66,30 @@ class JustiFiController(http.Controller):
 
             if not tx:
                 _logger.warning("JustiFi: Transaction not found by checkout_id=%s, trying fallback", checkout_id)
-                # Fallback: find the most recent pending JustiFi transaction without a provider_reference
+                # Fallback: find the most recent JustiFi transaction that hasn't been completed
                 provider = request.env['payment.provider'].sudo().search([
                     ('code', '=', 'justifi'),
                     ('state', '!=', 'disabled'),
                 ], limit=1)
                 if provider:
+                    # Try draft/pending first
                     tx = request.env['payment.transaction'].sudo().search([
                         ('provider_id', '=', provider.id),
                         ('state', 'in', ['draft', 'pending']),
-                        ('provider_reference', '=', False),
                     ], order='id desc', limit=1)
+
+                    # If not found, try any non-completed transaction
+                    if not tx:
+                        tx = request.env['payment.transaction'].sudo().search([
+                            ('provider_id', '=', provider.id),
+                            ('state', 'not in', ['done', 'cancel', 'error']),
+                        ], order='id desc', limit=1)
+
                     if tx:
                         # Store the checkout_id for future reference
                         tx.provider_reference = checkout_id
-                        _logger.info("JustiFi: Found transaction %s via fallback, stored checkout_id", tx.reference)
+                        _logger.info("JustiFi: Found transaction %s via fallback (state=%s), stored checkout_id",
+                                    tx.reference, tx.state)
 
             if not tx:
                 _logger.error("JustiFi: Transaction not found for checkout_id=%s (even with fallback)", checkout_id)
