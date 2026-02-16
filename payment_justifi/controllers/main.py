@@ -39,11 +39,12 @@ class JustiFiController(http.Controller):
         """
         Handle payment completion from the frontend.
 
-        Called by JavaScript when JustiFi modular checkout fires submit-event.
+        Called by JavaScript after tokenization or checkout completion.
 
         Expected form data:
         - checkout_id: The JustiFi checkout ID
-        - payment_id: The successful payment ID from submit-event
+        - payment_token: The tokenized payment method ID (from tokenize component)
+        - payment_id: The successful payment ID (from checkout completion)
 
         :return: Redirect to payment status page
         """
@@ -51,6 +52,7 @@ class JustiFiController(http.Controller):
 
         try:
             checkout_id = kwargs.get('checkout_id')
+            payment_token = kwargs.get('payment_token')
             payment_id = kwargs.get('payment_id')
 
             if not checkout_id:
@@ -66,13 +68,23 @@ class JustiFiController(http.Controller):
                 _logger.error("JustiFi: Transaction not found for checkout_id=%s", checkout_id)
                 return request.redirect('/payment/status')
 
-            # Get the checkout status from JustiFi to verify
             provider = tx.provider_id
-            try:
-                checkout_data = provider._justifi_get_checkout(checkout_id)
-            except ValidationError as e:
-                _logger.error("JustiFi: Failed to verify checkout: %s", str(e))
-                return request.redirect('/payment/status')
+
+            # If we have a payment token, complete the checkout with it
+            if payment_token:
+                _logger.info("JustiFi: Completing checkout %s with payment token %s", checkout_id, payment_token)
+                try:
+                    checkout_data = provider._justifi_complete_checkout(checkout_id, payment_token)
+                except ValidationError as e:
+                    _logger.error("JustiFi: Failed to complete checkout: %s", str(e))
+                    return request.redirect('/payment/status')
+            else:
+                # No token, just verify the checkout status
+                try:
+                    checkout_data = provider._justifi_get_checkout(checkout_id)
+                except ValidationError as e:
+                    _logger.error("JustiFi: Failed to verify checkout: %s", str(e))
+                    return request.redirect('/payment/status')
 
             # Process the payment data
             checkout_data['checkout_id'] = checkout_id

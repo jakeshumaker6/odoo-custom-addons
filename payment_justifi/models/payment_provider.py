@@ -295,15 +295,13 @@ class PaymentProvider(models.Model):
         :param recordset currency: The currency record
         :param int partner_id: The partner ID
         :param bool is_validation: Whether this is a validation transaction
-        :return: JSON-encoded string of inline form values
+        :return: dict of inline form values
         """
-        import json
-        from odoo.http import request
         self.ensure_one()
 
         if is_validation:
             # For validation (saving payment method), we don't need a checkout
-            return json.dumps({})
+            return {}
 
         # Convert amount to cents
         amount_cents = int(amount * 100)
@@ -338,15 +336,13 @@ class PaymentProvider(models.Model):
         # Get web component token
         auth_token = self._justifi_get_web_component_token(checkout_id)
 
-        values = {
+        return {
             'checkout_id': checkout_id,
             'auth_token': auth_token,
             'account_id': self.justifi_account_id,
             'payment_method_group_id': self.justifi_payment_method_group_id or '',
             'api_url': '/payment/justifi/complete',
         }
-
-        return json.dumps(values)
 
     def _justifi_get_checkout(self, checkout_id):
         """
@@ -385,3 +381,57 @@ class PaymentProvider(models.Model):
 
         data = response.json()
         return data.get('data', data)
+
+    def _justifi_complete_checkout(self, checkout_id, payment_token):
+        """
+        Complete a checkout with a payment token.
+
+        :param checkout_id: The checkout ID to complete
+        :param payment_token: The tokenized payment method ID
+        :return: Checkout data dict with payment result
+        :raises ValidationError: If completion fails
+        """
+        self.ensure_one()
+
+        access_token = self._justifi_get_access_token()
+
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+            'Sub-Account': self.justifi_account_id,
+        }
+
+        url = f'{CHECKOUTS_URL}/{checkout_id}/complete'
+
+        payload = {
+            'payment_method_id': payment_token,
+        }
+
+        _logger.info("JustiFi: Completing checkout %s with token %s", checkout_id, payment_token)
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+        except requests.exceptions.RequestException as e:
+            _logger.error("JustiFi: Network error completing checkout: %s", str(e))
+            raise ValidationError(_("Could not connect to JustiFi. Please try again later."))
+
+        if response.status_code >= 400:
+            _logger.error(
+                "JustiFi: Failed to complete checkout. Status: %s, Response: %s",
+                response.status_code, response.text
+            )
+            error_msg = "Payment failed"
+            try:
+                error_data = response.json()
+                if 'error' in error_data and 'message' in error_data['error']:
+                    error_msg = error_data['error']['message']
+            except Exception:
+                pass
+            raise ValidationError(_("JustiFi: %s") % error_msg)
+
+        data = response.json()
+        checkout_data = data.get('data', data)
+
+        _logger.info("JustiFi: Checkout completed. Status: %s", checkout_data.get('status'))
+
+        return checkout_data
