@@ -85,6 +85,19 @@ class JustiFiController(http.Controller):
                             ('state', 'not in', ['done', 'cancel', 'error']),
                         ], order='id desc', limit=1)
 
+                    # Last resort: find ANY recent pending transaction and reassign to JustiFi
+                    if not tx:
+                        _logger.warning("JustiFi: No JustiFi transactions found, looking for any pending transaction")
+                        tx = request.env['payment.transaction'].sudo().search([
+                            ('state', 'in', ['draft', 'pending']),
+                            ('provider_reference', '=', False),
+                        ], order='id desc', limit=1)
+                        if tx:
+                            # Reassign this transaction to JustiFi provider
+                            tx.provider_id = provider.id
+                            _logger.info("JustiFi: Reassigned transaction %s from provider %s to JustiFi",
+                                        tx.reference, tx.provider_id.code)
+
                     if tx:
                         # Store the checkout_id for future reference
                         tx.provider_reference = checkout_id
