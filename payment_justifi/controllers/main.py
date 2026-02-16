@@ -119,20 +119,35 @@ class JustiFiController(http.Controller):
                     try:
                         provider = request.env['payment.provider'].sudo().browse(int(provider_id))
                         if provider.exists() and provider.code == 'justifi':
-                            # Generate a unique reference
-                            reference = request.env['payment.transaction'].sudo()._compute_reference(
-                                'justifi', prefix='JUSTIFI'
-                            )
-                            # Create the transaction
-                            tx = request.env['payment.transaction'].sudo().create({
-                                'provider_id': provider.id,
-                                'reference': reference,
-                                'amount': float(amount),
-                                'currency_id': int(currency_id),
-                                'partner_id': int(partner_id),
-                                'provider_reference': checkout_id,
-                                'operation': 'online_direct',
-                            })
+                            # Get the card payment method for JustiFi
+                            payment_method = request.env['payment.method'].sudo().search([
+                                ('code', '=', 'card'),
+                                ('provider_ids', 'in', [provider.id]),
+                            ], limit=1)
+                            if not payment_method:
+                                # Fallback: get any card payment method
+                                payment_method = request.env['payment.method'].sudo().search([
+                                    ('code', '=', 'card'),
+                                ], limit=1)
+
+                            if not payment_method:
+                                _logger.error("JustiFi: No card payment method found")
+                            else:
+                                # Generate a unique reference
+                                reference = request.env['payment.transaction'].sudo()._compute_reference(
+                                    'justifi', prefix='JUSTIFI'
+                                )
+                                # Create the transaction
+                                tx = request.env['payment.transaction'].sudo().create({
+                                    'provider_id': provider.id,
+                                    'payment_method_id': payment_method.id,
+                                    'reference': reference,
+                                    'amount': float(amount),
+                                    'currency_id': int(currency_id),
+                                    'partner_id': int(partner_id),
+                                    'provider_reference': checkout_id,
+                                    'operation': 'online_direct',
+                                })
                             _logger.info("JustiFi: Created transaction %s (id=%s) for checkout_id=%s",
                                         tx.reference, tx.id, checkout_id)
                         else:
