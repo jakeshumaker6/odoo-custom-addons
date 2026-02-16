@@ -83,38 +83,63 @@
                     console.log('=== JUSTIFI DEBUG ===');
                     console.log('Raw paymentToken:', paymentToken);
                     console.log('Type:', typeof paymentToken);
-                    console.log('JSON:', JSON.stringify(paymentToken, null, 2));
+                    if (paymentToken) {
+                        console.log('Keys:', Object.keys(paymentToken));
+                        console.log('Has token prop:', 'token' in paymentToken, '| value:', paymentToken.token);
+                        console.log('Has id prop:', 'id' in paymentToken, '| value:', paymentToken.id);
+                    }
 
-                    // Extract token ID - try all possible locations
+                    // Extract token ID - based on JustiFi tokenize-payment-method response
+                    // The response should have {token: "pm_xxx", ...} at the top level
                     let tokenId = '';
                     if (paymentToken) {
-                        // JustiFi tokenize returns {id: "pm_xxx", ...} for the payment method
-                        tokenId = paymentToken.id ||
-                                  paymentToken.token ||
-                                  paymentToken.payment_method_id ||
-                                  (paymentToken.data &amp;&amp; paymentToken.data.id) ||
-                                  (paymentToken.payment_method &amp;&amp; paymentToken.payment_method.id) ||
-                                  '';
-
-                        // If still no token and it's an object, try to find any property ending with _id
-                        if (!tokenId &amp;&amp; typeof paymentToken === 'object') {
-                            for (const key of Object.keys(paymentToken)) {
-                                const val = paymentToken[key];
-                                if (typeof val === 'string' &amp;&amp; val.startsWith('pm_')) {
-                                    tokenId = val;
-                                    console.log('Found token in key:', key);
-                                    break;
+                        // Direct token property (most common)
+                        if (typeof paymentToken.token === 'string' &amp;&amp; paymentToken.token.startsWith('pm_')) {
+                            tokenId = paymentToken.token;
+                            console.log('Found token in paymentToken.token');
+                        }
+                        // Direct id property
+                        else if (typeof paymentToken.id === 'string' &amp;&amp; paymentToken.id.startsWith('pm_')) {
+                            tokenId = paymentToken.id;
+                            console.log('Found token in paymentToken.id');
+                        }
+                        // Nested in data
+                        else if (paymentToken.data &amp;&amp; typeof paymentToken.data.token === 'string') {
+                            tokenId = paymentToken.data.token;
+                            console.log('Found token in paymentToken.data.token');
+                        }
+                        // Nested in response
+                        else if (paymentToken.response &amp;&amp; typeof paymentToken.response.token === 'string') {
+                            tokenId = paymentToken.response.token;
+                            console.log('Found token in paymentToken.response.token');
+                        }
+                        // Fallback: search all string properties for pm_ prefix
+                        else if (typeof paymentToken === 'object') {
+                            const searchObj = function(obj, depth) {
+                                if (depth > 3 || !obj) return '';
+                                for (const key of Object.keys(obj)) {
+                                    const val = obj[key];
+                                    if (typeof val === 'string' &amp;&amp; val.startsWith('pm_')) {
+                                        console.log('Found token via search in:', key);
+                                        return val;
+                                    }
+                                    if (typeof val === 'object' &amp;&amp; val !== null) {
+                                        const found = searchObj(val, depth + 1);
+                                        if (found) return found;
+                                    }
                                 }
-                            }
+                                return '';
+                            };
+                            tokenId = searchObj(paymentToken, 0);
                         }
                     }
 
                     console.log('Extracted token ID:', tokenId);
 
                     if (!tokenId) {
-                        console.error('NO TOKEN ID FOUND - Check the raw paymentToken above');
-                        // Show alert so user can report the data structure
-                        alert('Debug: No token found. Check console (F12) and report the paymentToken structure.');
+                        console.error('NO TOKEN ID FOUND');
+                        console.log('Full JSON:', JSON.stringify(paymentToken, null, 2));
+                        alert('Debug: No pm_ token found. See console for full response.');
                     }
 
                     const fields = { 'payment_token': tokenId, 'checkout_id': checkoutId };
