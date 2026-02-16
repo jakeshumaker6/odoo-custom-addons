@@ -134,6 +134,7 @@ class JustiFiController(http.Controller):
                                 _logger.error("JustiFi: No card payment method found")
                             else:
                                 # Find matching unpaid invoice to link the transaction
+                                # First try exact match on partner and amount
                                 invoice = request.env['account.move'].sudo().search([
                                     ('partner_id', '=', int(partner_id)),
                                     ('amount_residual', '=', float(amount)),
@@ -143,16 +144,25 @@ class JustiFiController(http.Controller):
                                 ], order='id desc', limit=1)
 
                                 if not invoice:
-                                    # Try without exact amount match (allow small differences)
+                                    # Try matching by amount only (partner might differ from logged-in user)
                                     invoice = request.env['account.move'].sudo().search([
-                                        ('partner_id', '=', int(partner_id)),
+                                        ('amount_residual', '=', float(amount)),
                                         ('state', '=', 'posted'),
                                         ('payment_state', 'in', ['not_paid', 'partial']),
                                         ('move_type', 'in', ['out_invoice', 'out_refund']),
                                     ], order='id desc', limit=1)
 
-                                _logger.info("JustiFi: Found invoice %s for transaction",
-                                            invoice.name if invoice else 'None')
+                                if not invoice:
+                                    # Last resort: most recent unpaid invoice
+                                    invoice = request.env['account.move'].sudo().search([
+                                        ('state', '=', 'posted'),
+                                        ('payment_state', 'in', ['not_paid', 'partial']),
+                                        ('move_type', 'in', ['out_invoice', 'out_refund']),
+                                    ], order='id desc', limit=1)
+
+                                _logger.info("JustiFi: Found invoice %s (partner=%s) for transaction",
+                                            invoice.name if invoice else 'None',
+                                            invoice.partner_id.name if invoice else 'None')
 
                                 # Generate a unique reference
                                 reference = request.env['payment.transaction'].sudo()._compute_reference(
@@ -160,13 +170,16 @@ class JustiFiController(http.Controller):
                                 )
 
                                 # Build transaction values
+                                # Use invoice's partner if found, otherwise use passed partner
+                                tx_partner_id = invoice.partner_id.id if invoice else int(partner_id)
+
                                 tx_values = {
                                     'provider_id': provider.id,
                                     'payment_method_id': payment_method.id,
                                     'reference': reference,
                                     'amount': float(amount),
                                     'currency_id': int(currency_id),
-                                    'partner_id': int(partner_id),
+                                    'partner_id': tx_partner_id,
                                     'provider_reference': checkout_id,
                                     'operation': 'online_direct',
                                 }
