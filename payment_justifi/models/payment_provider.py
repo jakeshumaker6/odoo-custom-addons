@@ -391,29 +391,40 @@ class PaymentProvider(models.Model):
         :return: Checkout data dict with payment result
         :raises ValidationError: If completion fails
         """
+        import uuid
         self.ensure_one()
 
         access_token = self._justifi_get_access_token()
+
+        # Generate idempotency key for this request
+        idempotency_key = str(uuid.uuid4())
 
         headers = {
             'Authorization': f'Bearer {access_token}',
             'Content-Type': 'application/json',
             'Sub-Account': self.justifi_account_id,
+            'Idempotency-Key': idempotency_key,
         }
 
         url = f'{CHECKOUTS_URL}/{checkout_id}/complete'
 
+        # Per JustiFi API docs: use 'payment_token' not 'payment_method_id'
         payload = {
-            'payment_method_id': payment_token,
+            'payment_token': payment_token,
+            'payment_mode': 'ecom',  # ecommerce payment
         }
 
-        _logger.info("JustiFi: Completing checkout %s with token %s", checkout_id, payment_token)
+        _logger.info("JustiFi: Completing checkout %s with token %s (idempotency: %s)",
+                     checkout_id, payment_token, idempotency_key)
 
         try:
             response = requests.post(url, json=payload, headers=headers, timeout=30)
         except requests.exceptions.RequestException as e:
             _logger.error("JustiFi: Network error completing checkout: %s", str(e))
             raise ValidationError(_("Could not connect to JustiFi. Please try again later."))
+
+        _logger.info("JustiFi: Complete checkout response: %s %s",
+                     response.status_code, response.text[:500] if response.text else '')
 
         if response.status_code >= 400:
             _logger.error(

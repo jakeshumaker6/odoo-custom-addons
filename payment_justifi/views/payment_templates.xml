@@ -37,6 +37,7 @@
                 t-att-auth-token="jf_values.get('auth_token', '')"
                 t-att-account-id="jf_values.get('account_id', '')"
                 disable-bank-account="true"
+                hide-submit-button="true"
                 style="display: none;"
                 id="justifi-tokenize">
             </justifi-tokenize-payment-method>
@@ -79,11 +80,32 @@
                 }
 
                 function redirectToComplete(paymentToken) {
+                    console.log('Payment token received:', JSON.stringify(paymentToken));
+
+                    // Extract token ID - it could be in different places depending on JustiFi response
+                    let tokenId = '';
+                    if (paymentToken) {
+                        // Try various possible locations of the payment method ID
+                        tokenId = paymentToken.id ||
+                                  paymentToken.token ||
+                                  paymentToken.payment_method_id ||
+                                  (paymentToken.data &amp;&amp; paymentToken.data.id) ||
+                                  (paymentToken.payment_method &amp;&amp; paymentToken.payment_method.id) ||
+                                  '';
+                    }
+
+                    console.log('Extracted token ID:', tokenId);
+
+                    if (!tokenId) {
+                        console.error('No token ID found in payment response');
+                        // Still try to complete - maybe the checkout was already completed
+                    }
+
                     const form = document.createElement('form');
                     form.method = 'POST';
                     form.action = apiUrl;
-                    const tokenId = paymentToken?.id || paymentToken?.token || '';
                     const fields = { 'payment_token': tokenId, 'checkout_id': checkoutId };
+                    console.log('Submitting to backend:', fields);
                     for (const [key, value] of Object.entries(fields)) {
                         const input = document.createElement('input');
                         input.type = 'hidden';
