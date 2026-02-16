@@ -115,17 +115,18 @@
                     wrapperEl.style.display = 'block';
 
                     // Create the modular checkout component
+                    // Per docs: requires auth-token, checkout-id, AND account-id
                     const modularCheckout = document.createElement('justifi-modular-checkout');
                     modularCheckout.setAttribute('auth-token', authToken);
                     modularCheckout.setAttribute('checkout-id', checkoutId);
+                    modularCheckout.setAttribute('account-id', accountId);
 
-                    // Add the card form child component (required)
-                    const cardForm = document.createElement('justifi-card-form');
-                    modularCheckout.appendChild(cardForm);
-
-                    // Add billing form for ZIP code (required for card payments)
-                    const billingForm = document.createElement('justifi-card-billing-form-simple');
-                    modularCheckout.appendChild(billingForm);
+                    // Use justifi-tokenize-payment-method which handles card + billing in one component
+                    // This is the recommended approach per JustiFi docs for modular checkout integration
+                    const tokenizePayment = document.createElement('justifi-tokenize-payment-method');
+                    tokenizePayment.setAttribute('disable-bank-account', 'true');  // Card only
+                    tokenizePayment.setAttribute('hide-submit-button', 'true');    // We use our own submit
+                    modularCheckout.appendChild(tokenizePayment);
 
                     // Add submit button INSIDE the modular checkout component
                     const submitBtn = document.createElement('button');
