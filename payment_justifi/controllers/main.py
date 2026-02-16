@@ -133,12 +133,34 @@ class JustiFiController(http.Controller):
                             if not payment_method:
                                 _logger.error("JustiFi: No card payment method found")
                             else:
+                                # Find matching unpaid invoice to link the transaction
+                                invoice = request.env['account.move'].sudo().search([
+                                    ('partner_id', '=', int(partner_id)),
+                                    ('amount_residual', '=', float(amount)),
+                                    ('state', '=', 'posted'),
+                                    ('payment_state', 'in', ['not_paid', 'partial']),
+                                    ('move_type', 'in', ['out_invoice', 'out_refund']),
+                                ], order='id desc', limit=1)
+
+                                if not invoice:
+                                    # Try without exact amount match (allow small differences)
+                                    invoice = request.env['account.move'].sudo().search([
+                                        ('partner_id', '=', int(partner_id)),
+                                        ('state', '=', 'posted'),
+                                        ('payment_state', 'in', ['not_paid', 'partial']),
+                                        ('move_type', 'in', ['out_invoice', 'out_refund']),
+                                    ], order='id desc', limit=1)
+
+                                _logger.info("JustiFi: Found invoice %s for transaction",
+                                            invoice.name if invoice else 'None')
+
                                 # Generate a unique reference
                                 reference = request.env['payment.transaction'].sudo()._compute_reference(
                                     'justifi', prefix='JUSTIFI'
                                 )
-                                # Create the transaction
-                                tx = request.env['payment.transaction'].sudo().create({
+
+                                # Build transaction values
+                                tx_values = {
                                     'provider_id': provider.id,
                                     'payment_method_id': payment_method.id,
                                     'reference': reference,
@@ -147,9 +169,16 @@ class JustiFiController(http.Controller):
                                     'partner_id': int(partner_id),
                                     'provider_reference': checkout_id,
                                     'operation': 'online_direct',
-                                })
-                            _logger.info("JustiFi: Created transaction %s (id=%s) for checkout_id=%s",
-                                        tx.reference, tx.id, checkout_id)
+                                }
+
+                                # Link to invoice if found
+                                if invoice:
+                                    tx_values['invoice_ids'] = [(6, 0, [invoice.id])]
+
+                                # Create the transaction
+                                tx = request.env['payment.transaction'].sudo().create(tx_values)
+                                _logger.info("JustiFi: Created transaction %s (id=%s) for checkout_id=%s, invoice=%s",
+                                            tx.reference, tx.id, checkout_id, invoice.name if invoice else 'None')
                         else:
                             _logger.error("JustiFi: Invalid provider_id=%s", provider_id)
                     except Exception as create_error:
