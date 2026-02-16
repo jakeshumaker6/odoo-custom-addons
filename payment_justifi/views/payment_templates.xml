@@ -80,32 +80,49 @@
                 }
 
                 function redirectToComplete(paymentToken) {
-                    console.log('Payment token received:', JSON.stringify(paymentToken));
+                    console.log('=== JUSTIFI DEBUG ===');
+                    console.log('Raw paymentToken:', paymentToken);
+                    console.log('Type:', typeof paymentToken);
+                    console.log('JSON:', JSON.stringify(paymentToken, null, 2));
 
-                    // Extract token ID - it could be in different places depending on JustiFi response
+                    // Extract token ID - try all possible locations
                     let tokenId = '';
                     if (paymentToken) {
-                        // Try various possible locations of the payment method ID
+                        // JustiFi tokenize returns {id: "pm_xxx", ...} for the payment method
                         tokenId = paymentToken.id ||
                                   paymentToken.token ||
                                   paymentToken.payment_method_id ||
                                   (paymentToken.data &amp;&amp; paymentToken.data.id) ||
                                   (paymentToken.payment_method &amp;&amp; paymentToken.payment_method.id) ||
                                   '';
+
+                        // If still no token and it's an object, try to find any property ending with _id
+                        if (!tokenId &amp;&amp; typeof paymentToken === 'object') {
+                            for (const key of Object.keys(paymentToken)) {
+                                const val = paymentToken[key];
+                                if (typeof val === 'string' &amp;&amp; val.startsWith('pm_')) {
+                                    tokenId = val;
+                                    console.log('Found token in key:', key);
+                                    break;
+                                }
+                            }
+                        }
                     }
 
                     console.log('Extracted token ID:', tokenId);
 
                     if (!tokenId) {
-                        console.error('No token ID found in payment response');
-                        // Still try to complete - maybe the checkout was already completed
+                        console.error('NO TOKEN ID FOUND - Check the raw paymentToken above');
+                        // Show alert so user can report the data structure
+                        alert('Debug: No token found. Check console (F12) and report the paymentToken structure.');
                     }
+
+                    const fields = { 'payment_token': tokenId, 'checkout_id': checkoutId };
+                    console.log('Submitting to backend:', fields);
 
                     const form = document.createElement('form');
                     form.method = 'POST';
                     form.action = apiUrl;
-                    const fields = { 'payment_token': tokenId, 'checkout_id': checkoutId };
-                    console.log('Submitting to backend:', fields);
                     for (const [key, value] of Object.entries(fields)) {
                         const input = document.createElement('input');
                         input.type = 'hidden';

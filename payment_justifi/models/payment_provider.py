@@ -320,7 +320,11 @@ class PaymentProvider(models.Model):
         checkout_id = checkout['id']
 
         # Find the pending transaction for this payment and store checkout_id
-        # Look for draft/pending transaction matching this provider, amount, and currency
+        # Use a broader search first, then narrow down
+        _logger.info("JustiFi: Looking for transaction with provider_id=%s, amount=%s, currency=%s",
+                     self.id, amount, currency.id)
+
+        # First try exact match
         tx = self.env['payment.transaction'].sudo().search([
             ('provider_id', '=', self.id),
             ('amount', '=', amount),
@@ -329,9 +333,21 @@ class PaymentProvider(models.Model):
             ('provider_reference', '=', False),
         ], order='id desc', limit=1)
 
+        # If not found, try without amount (in case of float precision issues)
+        if not tx:
+            _logger.info("JustiFi: Exact match not found, trying broader search")
+            tx = self.env['payment.transaction'].sudo().search([
+                ('provider_id', '=', self.id),
+                ('currency_id', '=', currency.id),
+                ('state', 'in', ['draft', 'pending']),
+                ('provider_reference', '=', False),
+            ], order='id desc', limit=1)
+
         if tx:
             tx.provider_reference = checkout_id
             _logger.info("JustiFi: Stored checkout_id %s in transaction %s", checkout_id, tx.reference)
+        else:
+            _logger.warning("JustiFi: No pending transaction found to store checkout_id %s", checkout_id)
 
         # Get web component token
         auth_token = self._justifi_get_web_component_token(checkout_id)
