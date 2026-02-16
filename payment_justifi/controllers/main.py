@@ -54,6 +54,14 @@ class JustiFiController(http.Controller):
             checkout_id = kwargs.get('checkout_id')
             payment_token = kwargs.get('payment_token')
             payment_id = kwargs.get('payment_id')
+            # Payment context passed from frontend
+            amount = kwargs.get('amount')
+            currency_id = kwargs.get('currency_id')
+            partner_id = kwargs.get('partner_id')
+            provider_id = kwargs.get('provider_id')
+
+            _logger.info("JustiFi: Complete params - checkout=%s, token=%s, amount=%s, currency=%s, partner=%s, provider=%s",
+                        checkout_id, payment_token, amount, currency_id, partner_id, provider_id)
 
             if not checkout_id:
                 _logger.error("JustiFi: Missing checkout_id")
@@ -105,7 +113,35 @@ class JustiFiController(http.Controller):
                                     tx.reference, tx.state)
 
             if not tx:
-                _logger.error("JustiFi: Transaction not found for checkout_id=%s (even with fallback)", checkout_id)
+                # No transaction found - create one if we have the necessary data
+                if amount and currency_id and partner_id and provider_id:
+                    _logger.info("JustiFi: Creating new transaction for checkout_id=%s", checkout_id)
+                    try:
+                        provider = request.env['payment.provider'].sudo().browse(int(provider_id))
+                        if provider.exists() and provider.code == 'justifi':
+                            # Generate a unique reference
+                            reference = request.env['payment.transaction'].sudo()._compute_reference(
+                                'justifi', prefix='JUSTIFI'
+                            )
+                            # Create the transaction
+                            tx = request.env['payment.transaction'].sudo().create({
+                                'provider_id': provider.id,
+                                'reference': reference,
+                                'amount': float(amount),
+                                'currency_id': int(currency_id),
+                                'partner_id': int(partner_id),
+                                'provider_reference': checkout_id,
+                                'operation': 'online_direct',
+                            })
+                            _logger.info("JustiFi: Created transaction %s (id=%s) for checkout_id=%s",
+                                        tx.reference, tx.id, checkout_id)
+                        else:
+                            _logger.error("JustiFi: Invalid provider_id=%s", provider_id)
+                    except Exception as create_error:
+                        _logger.exception("JustiFi: Failed to create transaction: %s", str(create_error))
+
+            if not tx:
+                _logger.error("JustiFi: Transaction not found for checkout_id=%s (even with fallback and creation attempt)", checkout_id)
                 return request.redirect('/payment/status')
 
             provider = tx.provider_id

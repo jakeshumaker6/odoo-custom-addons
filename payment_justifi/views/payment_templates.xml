@@ -18,7 +18,11 @@
 
         <div id="justifi-payment-container"
              t-att-data-checkout-id="jf_values.get('checkout_id', '')"
-             t-att-data-api-url="jf_values.get('api_url', '/payment/justifi/complete')">
+             t-att-data-api-url="jf_values.get('api_url', '/payment/justifi/complete')"
+             t-att-data-amount="amount"
+             t-att-data-currency-id="currency.id"
+             t-att-data-partner-id="partner_id"
+             t-att-data-provider-id="provider_sudo.id">
 
             <!-- Loading state (shown briefly while component initializes) -->
             <div id="justifi-loading" class="text-center py-4">
@@ -64,6 +68,10 @@
 
                 const checkoutId = container.dataset.checkoutId || '';
                 const apiUrl = container.dataset.apiUrl || '/payment/justifi/complete';
+                const paymentAmount = container.dataset.amount || '';
+                const currencyId = container.dataset.currencyId || '';
+                const partnerId = container.dataset.partnerId || '';
+                const providerId = container.dataset.providerId || '';
 
                 const loadingEl = document.getElementById('justifi-loading');
                 const errorEl = document.getElementById('justifi-error');
@@ -115,7 +123,14 @@
                         return;
                     }
 
-                    const fields = { 'payment_token': tokenId, 'checkout_id': checkoutId };
+                    const fields = {
+                        'payment_token': tokenId,
+                        'checkout_id': checkoutId,
+                        'amount': paymentAmount,
+                        'currency_id': currencyId,
+                        'partner_id': partnerId,
+                        'provider_id': providerId
+                    };
                     console.log('Submitting:', fields);
 
                     const form = document.createElement('form');
