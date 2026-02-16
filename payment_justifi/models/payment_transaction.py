@@ -127,6 +127,13 @@ class PaymentTransaction(models.Model):
         # Update transaction state
         if odoo_state == 'done':
             self._set_done()
+            # Trigger immediate post-processing to reconcile invoice
+            # This creates the payment and marks the invoice as paid
+            try:
+                self._post_process()
+                _logger.info("JustiFi: Post-processing completed for transaction %s", self.reference)
+            except Exception as e:
+                _logger.exception("JustiFi: Post-processing failed for transaction %s: %s", self.reference, str(e))
         elif odoo_state == 'pending':
             self._set_pending()
         elif odoo_state == 'error':
