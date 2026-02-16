@@ -234,7 +234,7 @@ class JustiFiController(http.Controller):
             _logger.exception("JustiFi: Error in complete endpoint: %s", str(e))
             return request.redirect('/payment/status')
 
-    @http.route(_webhook_url, type='json', auth='public', methods=['POST'], csrf=False)
+    @http.route(_webhook_url, type='jsonrpc', auth='public', methods=['POST'], csrf=False)
     def justifi_webhook(self, **kwargs):
         """
         Handle webhooks from JustiFi.
