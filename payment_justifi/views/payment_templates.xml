@@ -123,6 +123,10 @@
                     const cardForm = document.createElement('justifi-card-form');
                     modularCheckout.appendChild(cardForm);
 
+                    // Add billing form for ZIP code (required for card payments)
+                    const billingForm = document.createElement('justifi-card-billing-form-simple');
+                    modularCheckout.appendChild(billingForm);
+
                     // Add submit button INSIDE the modular checkout component
                     const submitBtn = document.createElement('button');
                     submitBtn.id = 'justifi-submit-btn';
@@ -133,6 +137,14 @@
 
                     wrapperEl.appendChild(modularCheckout);
                     console.log('Modular checkout component added to DOM');
+
+                    // Listen for checkout state changes (for debugging)
+                    modularCheckout.addEventListener('checkout-changed', function(event) {
+                        console.log('JustiFi checkout-changed:', event.detail);
+                        if (event.detail &amp;&amp; event.detail.selectedPaymentMethod) {
+                            console.log('Selected payment method:', event.detail.selectedPaymentMethod);
+                        }
+                    });
 
                     // Handle submit button click - calls submitCheckout() method
                     submitBtn.addEventListener('click', function(e) {
