@@ -13,8 +13,8 @@
                     )"
         />
 
-        <!-- Load JustiFi web components directly -->
-        <script type="module" src="https://cdn.jsdelivr.net/npm/@justifi/webcomponents@latest/dist/webcomponents/webcomponents.esm.js"/>
+        <!-- Load JustiFi web components -->
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@justifi/webcomponents@6.7.3/dist/webcomponents/webcomponents.esm.js"/>
 
         <div id="justifi-payment-container"
              t-att-data-inline-form-values="inline_form_values">
@@ -33,13 +33,12 @@
 
             <!-- JustiFi component container -->
             <div id="justifi-component-wrapper" style="display: none;">
-                <!-- justifi-modular-checkout will be inserted here by JavaScript -->
             </div>
 
-            <!-- Our own submit button -->
+            <!-- Submit button -->
             <div id="justifi-submit-container" style="display: none;" class="mt-3">
                 <button type="button" id="justifi-submit-btn" class="btn btn-primary w-100">
-                    Complete Payment
+                    Pay Now
                 </button>
             </div>
         </div>
@@ -50,35 +49,23 @@
                 const container = document.getElementById('justifi-payment-container');
                 if (!container) return;
 
-                // Hide Odoo's default submit button for this provider
-                // Find and hide any payment submit buttons in the parent form
+                // Hide Odoo's default submit button
                 setTimeout(function() {
-                    const payForm = container.closest('form');
-                    if (payForm) {
-                        const odooSubmitBtns = payForm.querySelectorAll('button[type="submit"], button[name="o_payment_submit_button"]');
-                        odooSubmitBtns.forEach(function(btn) {
-                            btn.style.display = 'none';
-                        });
-                    }
-                    // Also try to find the payment submit button by class
-                    const submitBtns = document.querySelectorAll('.o_payment_submit_button');
-                    submitBtns.forEach(function(btn) {
-                        btn.style.display = 'none';
-                    });
+                    const submitBtns = document.querySelectorAll('.o_payment_submit_button, button[name="o_payment_submit_button"]');
+                    submitBtns.forEach(function(btn) { btn.style.display = 'none'; });
                 }, 100);
 
-                // Parse inline form values from JSON
+                // Parse inline form values
                 let values = {};
                 try {
                     values = JSON.parse(container.dataset.inlineFormValues || '{}');
                 } catch (e) {
-                    console.error('Failed to parse JustiFi inline form values:', e);
+                    console.error('Failed to parse JustiFi values:', e);
                 }
 
                 const checkoutId = values.checkout_id || '';
                 const authToken = values.auth_token || '';
                 const accountId = values.account_id || '';
-                const paymentMethodGroupId = values.payment_method_group_id || '';
                 const apiUrl = values.api_url || '/payment/justifi/complete';
 
                 const loadingEl = document.getElementById('justifi-loading');
@@ -95,94 +82,88 @@
                     errorEl.style.display = 'block';
                 }
 
+                function redirectToComplete(paymentData) {
+                    const form = document.createElement('form');
+                    form.method = 'POST';
+                    form.action = apiUrl;
+                    const paymentId = paymentData?.id || paymentData?.payment_id || '';
+                    const fields = { 'payment_id': paymentId, 'checkout_id': checkoutId };
+                    for (const [key, value] of Object.entries(fields)) {
+                        const input = document.createElement('input');
+                        input.type = 'hidden';
+                        input.name = key;
+                        input.value = value || '';
+                        form.appendChild(input);
+                    }
+                    document.body.appendChild(form);
+                    form.submit();
+                }
+
                 if (!checkoutId || !authToken || !accountId) {
                     showError('Payment configuration error. Please contact support.');
                     return;
                 }
 
-                let checkoutComponent = null;
+                let modularCheckout = null;
 
-                // Wait for web components to be defined - try checkout-form first, then modular
-                customElements.whenDefined('justifi-checkout-form').then(function() {
+                // Wait for justifi-modular-checkout to be defined
+                customElements.whenDefined('justifi-modular-checkout').then(function() {
+                    console.log('justifi-modular-checkout is available');
                     loadingEl.style.display = 'none';
                     wrapperEl.style.display = 'block';
-                    submitContainerEl.style.display = 'none'; // Hide our button, checkout-form has its own
+                    submitContainerEl.style.display = 'block';
 
-                    // Create the checkout form component (has built-in submit)
-                    checkoutComponent = document.createElement('justifi-checkout-form');
-                    checkoutComponent.setAttribute('auth-token', authToken);
-                    checkoutComponent.setAttribute('checkout-id', checkoutId);
-                    checkoutComponent.setAttribute('account-id', accountId);
-                    if (paymentMethodGroupId) {
-                        checkoutComponent.setAttribute('payment-method-group-id', paymentMethodGroupId);
-                    }
+                    // Create the modular checkout component with child components
+                    modularCheckout = document.createElement('justifi-modular-checkout');
+                    modularCheckout.setAttribute('auth-token', authToken);
+                    modularCheckout.setAttribute('checkout-id', checkoutId);
 
-                    // Handle successful payment
-                    checkoutComponent.addEventListener('submitted', function(event) {
-                        const detail = event.detail || {};
-                        console.log('JustiFi submitted event:', detail);
-                        // Redirect to complete endpoint
-                        const form = document.createElement('form');
-                        form.method = 'POST';
-                        form.action = apiUrl;
+                    // Add the card form child component (required)
+                    const cardForm = document.createElement('justifi-card-form');
+                    modularCheckout.appendChild(cardForm);
 
-                        const paymentId = detail.data?.id || detail.id || '';
-                        const fields = {
-                            'payment_id': paymentId,
-                            'checkout_id': checkoutId
-                        };
-
-                        for (const [key, value] of Object.entries(fields)) {
-                            const input = document.createElement('input');
-                            input.type = 'hidden';
-                            input.name = key;
-                            input.value = value || '';
-                            form.appendChild(input);
-                        }
-
-                        document.body.appendChild(form);
-                        form.submit();
+                    // Listen for submit-event (emitted when checkout is successfully completed)
+                    modularCheckout.addEventListener('submit-event', function(event) {
+                        console.log('JustiFi submit-event:', event.detail);
+                        // Checkout completed successfully, redirect to Odoo
+                        redirectToComplete(event.detail);
                     });
 
-                    // Also listen for submit-event (alternate event name)
-                    checkoutComponent.addEventListener('submit-event', function(event) {
-                        const detail = event.detail || {};
-                        console.log('JustiFi submit-event:', detail);
-                        if (detail.data &amp;&amp; detail.data.id) {
-                            const form = document.createElement('form');
-                            form.method = 'POST';
-                            form.action = apiUrl;
-
-                            const fields = {
-                                'payment_id': detail.data.id,
-                                'checkout_id': checkoutId
-                            };
-
-                            for (const [key, value] of Object.entries(fields)) {
-                                const input = document.createElement('input');
-                                input.type = 'hidden';
-                                input.name = key;
-                                input.value = value || '';
-                                form.appendChild(input);
-                            }
-
-                            document.body.appendChild(form);
-                            form.submit();
-                        }
+                    // Listen for error-event
+                    modularCheckout.addEventListener('error-event', function(event) {
+                        console.log('JustiFi error-event:', event.detail);
+                        const errorMsg = event.detail?.message || event.detail?.error || 'Payment failed. Please try again.';
+                        showError(errorMsg);
+                        submitBtnEl.disabled = false;
+                        submitBtnEl.textContent = 'Pay Now';
                     });
 
-                    // Handle errors
-                    checkoutComponent.addEventListener('error-event', function(event) {
-                        const detail = event.detail || {};
-                        console.log('JustiFi error-event:', detail);
-                        showError(detail.message || 'Payment failed. Please try again.');
+                    // Listen for checkout-changed event
+                    modularCheckout.addEventListener('checkout-changed', function(event) {
+                        console.log('JustiFi checkout-changed:', event.detail);
                     });
 
-                    wrapperEl.appendChild(checkoutComponent);
-                    console.log('JustiFi checkout-form component loaded');
+                    wrapperEl.appendChild(modularCheckout);
+                    console.log('Modular checkout component added to DOM');
                 }).catch(function(err) {
-                    console.error('Failed to load JustiFi checkout-form:', err);
-                    showError('Failed to load payment component. Please refresh the page.');
+                    console.error('Failed to load justifi-modular-checkout:', err);
+                    showError('Failed to load payment form. Please refresh the page.');
+                });
+
+                // Handle our submit button click - calls the component's submit() method
+                submitBtnEl.addEventListener('click', function(e) {
+                    e.preventDefault();
+                    e.stopPropagation();
+
+                    if (modularCheckout &amp;&amp; typeof modularCheckout.submit === 'function') {
+                        submitBtnEl.disabled = true;
+                        submitBtnEl.textContent = 'Processing...';
+                        console.log('Calling modularCheckout.submit()');
+                        modularCheckout.submit();
+                    } else {
+                        console.error('Modular checkout not ready or submit not available');
+                        showError('Payment form not ready. Please wait a moment and try again.');
+                    }
                 });
             })();
         </script>
