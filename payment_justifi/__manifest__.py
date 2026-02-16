@@ -2,7 +2,7 @@
 
 {
     'name': 'Payment Provider: JustiFi',
-    'version': '19.0.1.0.1',
+    'version': '19.0.1.0.2',
     'category': 'Accounting/Payment Providers',
     'summary': 'Accept card payments via JustiFi payment processor.',
     'description': """
