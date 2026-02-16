@@ -3,16 +3,21 @@
 
     <!-- JustiFi Inline Form Template (standalone, referenced via inline_form_view_id) -->
     <template id="inline_form" name="JustiFi Inline Form">
+        <!-- Get inline form values from provider -->
+        <t t-set="inline_form_values"
+           t-value="provider_sudo._justifi_get_inline_form_values(
+                        amount,
+                        currency,
+                        partner_id,
+                        mode == 'validation',
+                    )"
+        />
+
         <!-- Load JustiFi web components directly -->
         <script type="module" src="https://cdn.jsdelivr.net/npm/@justifi/webcomponents@latest/dist/webcomponents/webcomponents.esm.js"/>
 
         <div id="justifi-payment-container"
-             t-att-data-checkout-id="provider_sudo_values.get('checkout_id', '')"
-             t-att-data-auth-token="provider_sudo_values.get('auth_token', '')"
-             t-att-data-account-id="provider_sudo_values.get('account_id', '')"
-             t-att-data-payment-method-group-id="provider_sudo_values.get('payment_method_group_id', '')"
-             t-att-data-api-url="provider_sudo_values.get('api_url', '/payment/justifi/complete')"
-             t-att-data-reference="reference">
+             t-att-data-inline-form-values="inline_form_values">
 
             <!-- Loading state -->
             <div id="justifi-loading" class="text-center py-4">
@@ -38,12 +43,19 @@
                 const container = document.getElementById('justifi-payment-container');
                 if (!container) return;
 
-                const checkoutId = container.dataset.checkoutId;
-                const authToken = container.dataset.authToken;
-                const accountId = container.dataset.accountId;
-                const paymentMethodGroupId = container.dataset.paymentMethodGroupId;
-                const apiUrl = container.dataset.apiUrl;
-                const reference = container.dataset.reference;
+                // Parse inline form values from JSON
+                let values = {};
+                try {
+                    values = JSON.parse(container.dataset.inlineFormValues || '{}');
+                } catch (e) {
+                    console.error('Failed to parse JustiFi inline form values:', e);
+                }
+
+                const checkoutId = values.checkout_id || '';
+                const authToken = values.auth_token || '';
+                const accountId = values.account_id || '';
+                const paymentMethodGroupId = values.payment_method_group_id || '';
+                const apiUrl = values.api_url || '/payment/justifi/complete';
 
                 const loadingEl = document.getElementById('justifi-loading');
                 const errorEl = document.getElementById('justifi-error');
@@ -91,7 +103,6 @@
                             const fields = {
                                 'payment_id': detail.data.id,
                                 'checkout_id': checkoutId,
-                                'reference': reference,
                                 'csrf_token': odoo.csrf_token
                             };
 

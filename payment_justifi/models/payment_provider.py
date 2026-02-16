@@ -284,6 +284,55 @@ class PaymentProvider(models.Model):
         _logger.info("JustiFi: Web component token obtained for checkout: %s", checkout_id)
         return token
 
+    def _justifi_get_inline_form_values(self, amount, currency, partner_id, is_validation=False, **kwargs):
+        """
+        Get values needed for the JustiFi inline form.
+
+        This method is called from the inline form template to get checkout
+        and authentication values for the JustiFi web component.
+
+        :param float amount: The payment amount
+        :param recordset currency: The currency record
+        :param int partner_id: The partner ID
+        :param bool is_validation: Whether this is a validation transaction
+        :return: JSON-encoded string of inline form values
+        """
+        import json
+        self.ensure_one()
+
+        if is_validation:
+            # For validation (saving payment method), we don't need a checkout
+            return json.dumps({})
+
+        # Convert amount to cents
+        amount_cents = int(amount * 100)
+
+        # Get base URL
+        base_url = self.get_base_url()
+
+        # Create checkout session
+        checkout = self._justifi_create_checkout(
+            amount=amount_cents,
+            currency=currency.name,
+            description=f"Payment",
+            origin_url=base_url,
+        )
+
+        checkout_id = checkout['id']
+
+        # Get web component token
+        auth_token = self._justifi_get_web_component_token(checkout_id)
+
+        values = {
+            'checkout_id': checkout_id,
+            'auth_token': auth_token,
+            'account_id': self.justifi_account_id,
+            'payment_method_group_id': self.justifi_payment_method_group_id or '',
+            'api_url': '/payment/justifi/complete',
+        }
+
+        return json.dumps(values)
+
     def _justifi_get_checkout(self, checkout_id):
         """
         Get checkout details from JustiFi.
