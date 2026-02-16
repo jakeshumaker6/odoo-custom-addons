@@ -298,6 +298,7 @@ class PaymentProvider(models.Model):
         :return: JSON-encoded string of inline form values
         """
         import json
+        from odoo.http import request
         self.ensure_one()
 
         if is_validation:
@@ -319,6 +320,20 @@ class PaymentProvider(models.Model):
         )
 
         checkout_id = checkout['id']
+
+        # Find the pending transaction for this payment and store checkout_id
+        # Look for draft/pending transaction matching this provider, amount, and currency
+        tx = self.env['payment.transaction'].sudo().search([
+            ('provider_id', '=', self.id),
+            ('amount', '=', amount),
+            ('currency_id', '=', currency.id),
+            ('state', 'in', ['draft', 'pending']),
+            ('provider_reference', '=', False),
+        ], order='id desc', limit=1)
+
+        if tx:
+            tx.provider_reference = checkout_id
+            _logger.info("JustiFi: Stored checkout_id %s in transaction %s", checkout_id, tx.reference)
 
         # Get web component token
         auth_token = self._justifi_get_web_component_token(checkout_id)
