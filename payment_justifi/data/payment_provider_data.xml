@@ -9,6 +9,7 @@
             <field name="sequence">100</field>
             <field name="state">disabled</field>
             <field name="is_published">False</field>
+            <field name="inline_form_view_id" ref="payment_justifi.inline_form"/>
             <field name="pre_msg">
                 <![CDATA[<p>Pay securely with your credit or debit card via JustiFi.</p>]]>
             </field>

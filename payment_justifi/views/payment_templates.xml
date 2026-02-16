@@ -1,17 +1,17 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- JustiFi Inline Form Template -->
-    <template id="payment_form_justifi" name="JustiFi Payment Form">
+    <!-- JustiFi Inline Form Template (standalone, referenced via inline_form_view_id) -->
+    <template id="inline_form" name="JustiFi Inline Form">
         <!-- Load JustiFi web components directly -->
         <script type="module" src="https://cdn.jsdelivr.net/npm/@justifi/webcomponents@latest/dist/webcomponents/webcomponents.esm.js"/>
 
         <div id="justifi-payment-container"
-             t-att-data-checkout-id="checkout_id"
-             t-att-data-auth-token="auth_token"
-             t-att-data-account-id="account_id"
-             t-att-data-payment-method-group-id="payment_method_group_id"
-             t-att-data-api-url="api_url"
+             t-att-data-checkout-id="provider_sudo_values.get('checkout_id', '')"
+             t-att-data-auth-token="provider_sudo_values.get('auth_token', '')"
+             t-att-data-account-id="provider_sudo_values.get('account_id', '')"
+             t-att-data-payment-method-group-id="provider_sudo_values.get('payment_method_group_id', '')"
+             t-att-data-api-url="provider_sudo_values.get('api_url', '/payment/justifi/complete')"
              t-att-data-reference="reference">
 
             <!-- Loading state -->
@@ -31,24 +31,95 @@
                 <!-- justifi-modular-checkout will be inserted here by JavaScript -->
             </div>
         </div>
-    </template>
 
-    <!-- Extend the payment form to include JustiFi -->
-    <template id="payment_provider_inline_form_justifi"
-              inherit_id="payment.payment_provider_inline_form"
-              primary="True">
-        <xpath expr="//div[hasclass('o_payment_provider_inline_form')]" position="inside">
-            <t t-if="provider_sudo.code == 'justifi'">
-                <t t-call="payment_justifi.payment_form_justifi">
-                    <t t-set="checkout_id" t-value="provider_sudo_values.get('checkout_id', '')"/>
-                    <t t-set="auth_token" t-value="provider_sudo_values.get('auth_token', '')"/>
-                    <t t-set="account_id" t-value="provider_sudo_values.get('account_id', '')"/>
-                    <t t-set="payment_method_group_id" t-value="provider_sudo_values.get('payment_method_group_id', '')"/>
-                    <t t-set="api_url" t-value="provider_sudo_values.get('api_url', '/payment/justifi/complete')"/>
-                    <t t-set="reference" t-value="reference"/>
-                </t>
-            </t>
-        </xpath>
+        <!-- Inline script to initialize JustiFi component -->
+        <script type="text/javascript">
+            (function() {
+                const container = document.getElementById('justifi-payment-container');
+                if (!container) return;
+
+                const checkoutId = container.dataset.checkoutId;
+                const authToken = container.dataset.authToken;
+                const accountId = container.dataset.accountId;
+                const paymentMethodGroupId = container.dataset.paymentMethodGroupId;
+                const apiUrl = container.dataset.apiUrl;
+                const reference = container.dataset.reference;
+
+                const loadingEl = document.getElementById('justifi-loading');
+                const errorEl = document.getElementById('justifi-error');
+                const wrapperEl = document.getElementById('justifi-component-wrapper');
+
+                function showError(message) {
+                    loadingEl.style.display = 'none';
+                    wrapperEl.style.display = 'none';
+                    errorEl.textContent = message;
+                    errorEl.style.display = 'block';
+                }
+
+                if (!checkoutId || !authToken || !accountId) {
+                    showError('Payment configuration error. Please contact support.');
+                    return;
+                }
+
+                // Wait for web components to be defined
+                customElements.whenDefined('justifi-modular-checkout').then(function() {
+                    loadingEl.style.display = 'none';
+                    wrapperEl.style.display = 'block';
+
+                    // Create the modular checkout component
+                    const checkout = document.createElement('justifi-modular-checkout');
+                    checkout.setAttribute('auth-token', authToken);
+                    checkout.setAttribute('checkout-id', checkoutId);
+                    checkout.setAttribute('account-id', accountId);
+                    if (paymentMethodGroupId) {
+                        checkout.setAttribute('payment-method-group-id', paymentMethodGroupId);
+                    }
+
+                    // Add card form inside modular checkout
+                    const cardForm = document.createElement('justifi-card-form');
+                    checkout.appendChild(cardForm);
+
+                    // Handle successful payment
+                    checkout.addEventListener('submit-event', function(event) {
+                        const detail = event.detail || {};
+                        if (detail.data &amp;&amp; detail.data.id) {
+                            // Payment successful, submit to Odoo
+                            const form = document.createElement('form');
+                            form.method = 'POST';
+                            form.action = apiUrl;
+
+                            const fields = {
+                                'payment_id': detail.data.id,
+                                'checkout_id': checkoutId,
+                                'reference': reference,
+                                'csrf_token': odoo.csrf_token
+                            };
+
+                            for (const [key, value] of Object.entries(fields)) {
+                                const input = document.createElement('input');
+                                input.type = 'hidden';
+                                input.name = key;
+                                input.value = value || '';
+                                form.appendChild(input);
+                            }
+
+                            document.body.appendChild(form);
+                            form.submit();
+                        }
+                    });
+
+                    // Handle errors
+                    checkout.addEventListener('error-event', function(event) {
+                        const detail = event.detail || {};
+                        showError(detail.message || 'Payment failed. Please try again.');
+                    });
+
+                    wrapperEl.appendChild(checkout);
+                }).catch(function(err) {
+                    showError('Failed to load payment component. Please refresh the page.');
+                });
+            })();
+        </script>
     </template>
 
 </odoo>
