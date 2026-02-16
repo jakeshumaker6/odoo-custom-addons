@@ -78,13 +78,14 @@ class PaymentTransaction(models.Model):
 
         return res
 
-    def _get_specific_processing_values(self):
+    def _get_specific_processing_values(self, processing_values):
         """
         Return JustiFi-specific processing values.
 
+        :param dict processing_values: The generic processing values
         :return: dict of JustiFi-specific values
         """
-        res = super()._get_specific_processing_values()
+        res = super()._get_specific_processing_values(processing_values)
 
         if self.provider_code != 'justifi':
             return res
