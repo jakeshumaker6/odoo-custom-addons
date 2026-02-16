@@ -34,50 +34,37 @@ class JustiFiController(http.Controller):
         # Redirect to the payment status page
         return request.redirect('/payment/status')
 
-    @http.route(_complete_url, type='json', auth='public', methods=['POST'], csrf=False)
+    @http.route(_complete_url, type='http', auth='public', methods=['POST'], csrf=False, save_session=False)
     def justifi_complete(self, **kwargs):
         """
         Handle payment completion from the frontend.
 
         Called by JavaScript when JustiFi modular checkout fires submit-event.
 
-        Expected JSON body:
-        {
-            "checkout_id": "...",
-            "payment_id": "...",  # successful_payment_id from submit-event
-            "reference": "..."    # Odoo transaction reference
-        }
+        Expected form data:
+        - checkout_id: The JustiFi checkout ID
+        - payment_id: The successful payment ID from submit-event
 
-        :return: JSON response with redirect URL
+        :return: Redirect to payment status page
         """
-        _logger.info("JustiFi: Complete endpoint called")
+        _logger.info("JustiFi: Complete endpoint called with: %s", kwargs)
 
         try:
-            data = request.jsonrequest
-            _logger.info("JustiFi: Complete data: %s", data)
-
-            checkout_id = data.get('checkout_id')
-            payment_id = data.get('payment_id')
-            reference = data.get('reference')
+            checkout_id = kwargs.get('checkout_id')
+            payment_id = kwargs.get('payment_id')
 
             if not checkout_id:
-                return {'error': 'Missing checkout_id'}
+                _logger.error("JustiFi: Missing checkout_id")
+                return request.redirect('/payment/status')
 
-            # Find the transaction
+            # Find the transaction by checkout_id (stored in provider_reference)
             tx = request.env['payment.transaction'].sudo().search([
                 ('provider_reference', '=', checkout_id),
             ], limit=1)
 
             if not tx:
-                # Try finding by reference
-                if reference:
-                    tx = request.env['payment.transaction'].sudo().search([
-                        ('reference', '=', reference),
-                    ], limit=1)
-
-            if not tx:
                 _logger.error("JustiFi: Transaction not found for checkout_id=%s", checkout_id)
-                return {'error': 'Transaction not found'}
+                return request.redirect('/payment/status')
 
             # Get the checkout status from JustiFi to verify
             provider = tx.provider_id
@@ -85,7 +72,7 @@ class JustiFiController(http.Controller):
                 checkout_data = provider._justifi_get_checkout(checkout_id)
             except ValidationError as e:
                 _logger.error("JustiFi: Failed to verify checkout: %s", str(e))
-                return {'error': str(e)}
+                return request.redirect('/payment/status')
 
             # Process the payment data
             checkout_data['checkout_id'] = checkout_id
@@ -96,14 +83,11 @@ class JustiFiController(http.Controller):
 
             _logger.info("JustiFi: Payment completed for transaction %s", tx.reference)
 
-            return {
-                'success': True,
-                'redirect_url': '/payment/status',
-            }
+            return request.redirect('/payment/status')
 
         except Exception as e:
             _logger.exception("JustiFi: Error in complete endpoint: %s", str(e))
-            return {'error': str(e)}
+            return request.redirect('/payment/status')
 
     @http.route(_webhook_url, type='json', auth='public', methods=['POST'], csrf=False)
     def justifi_webhook(self, **kwargs):
