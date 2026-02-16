@@ -31,11 +31,6 @@ Configuration:
         'views/payment_templates.xml',
         'data/payment_provider_data.xml',
     ],
-    'assets': {
-        'web.assets_frontend': [
-            'payment_justifi/static/src/js/payment_form.js',
-        ],
-    },
     'application': False,
     'installable': True,
     'license': 'LGPL-3',

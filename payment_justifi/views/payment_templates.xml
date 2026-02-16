@@ -3,6 +3,9 @@
 
     <!-- JustiFi Inline Form Template -->
     <template id="payment_form_justifi" name="JustiFi Payment Form">
+        <!-- Load JustiFi web components directly -->
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@justifi/webcomponents@latest/dist/webcomponents/webcomponents.esm.js"/>
+
         <div id="justifi-payment-container"
              t-att-data-checkout-id="checkout_id"
              t-att-data-auth-token="auth_token"
@@ -28,13 +31,6 @@
                 <!-- justifi-modular-checkout will be inserted here by JavaScript -->
             </div>
         </div>
-    </template>
-
-    <!-- Include JustiFi web components -->
-    <template id="payment_justifi_assets" name="JustiFi Assets" inherit_id="web.assets_frontend">
-        <xpath expr="." position="inside">
-            <script type="module" src="https://cdn.jsdelivr.net/npm/@justifi/webcomponents@latest/dist/webcomponents/webcomponents.esm.js"/>
-        </xpath>
     </template>
 
     <!-- Extend the payment form to include JustiFi -->
