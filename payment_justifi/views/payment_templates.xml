@@ -138,9 +138,21 @@
                     wrapperEl.appendChild(modularCheckout);
                     console.log('Modular checkout component added to DOM');
 
-                    // Listen for checkout state changes (for debugging)
+                    // Track if we've set the payment method
+                    let paymentMethodSet = false;
+
+                    // Listen for checkout state changes
                     modularCheckout.addEventListener('checkout-changed', function(event) {
                         console.log('JustiFi checkout-changed:', event.detail);
+
+                        // On first checkout-changed event, set card as the payment method
+                        // Per JustiFi docs: "The wrapper does not automatically select a default payment method"
+                        if (!paymentMethodSet &amp;&amp; typeof modularCheckout.setSelectedPaymentMethod === 'function') {
+                            console.log('Setting payment method to card');
+                            modularCheckout.setSelectedPaymentMethod('card');
+                            paymentMethodSet = true;
+                        }
+
                         if (event.detail &amp;&amp; event.detail.selectedPaymentMethod) {
                             console.log('Selected payment method:', event.detail.selectedPaymentMethod);
                         }
