@@ -2,7 +2,7 @@
 
 {
     'name': 'Payment Provider: JustiFi',
-    'version': '19.0.1.0.18',
+    'version': '19.0.1.0.19',
     'category': 'Accounting/Payment Providers',
     'summary': 'Accept card payments via JustiFi payment processor.',
     'description': """
@@ -23,7 +23,7 @@ Configuration:
 2. Select JustiFi and configure your API credentials
 3. Set the provider state to Test or Enabled
     """,
-    'author': 'Custom Integration',
+    'author': 'Jake Shumaker at Pulse Marketing',
     'website': 'https://justifi.ai/',
     'depends': ['payment', 'account', 'portal'],
     'data': [
