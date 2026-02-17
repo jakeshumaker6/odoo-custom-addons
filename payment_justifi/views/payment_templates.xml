@@ -15,14 +15,22 @@
 
         <!-- Hide Odoo's default payment method placeholder image -->
         <style>
-            /* Hide the large placeholder image in payment method selection */
-            .o_payment_form .card .o_payment_option_card img.img-fluid,
-            .o_payment_form .card img[src*="placeholder"],
-            .o_payment_form .card img[src*="image_128"],
-            .o_payment_form .o_payment_option_card .float-end img,
-            .o_payment_form img.mw-100.rounded,
-            /* Target the specific placeholder shown in portal payment forms */
-            .card-body img.img-fluid.mw-100.rounded {
+            /* Hide the payment method image shown in payment form */
+            /* Target image inside the rounded overflow-hidden span */
+            span.d-block.rounded.overflow-hidden img,
+            span.overflow-hidden.rounded img.img-fluid,
+            span.shadow-sm img.img-fluid,
+            /* Target by image source pattern */
+            img[src*="image_payment_form"],
+            img[src*="payment.method"],
+            /* Fallback selectors */
+            .gap-1.flex-wrap.d-flex span img,
+            div[for="o_payment_radio"] img.img-fluid {
+                display: none !important;
+            }
+            /* Also hide the parent span to remove any spacing */
+            span.d-block.rounded.overflow-hidden.shadow-sm,
+            .gap-1.flex-wrap.d-flex > span {
                 display: none !important;
             }
         </style>
