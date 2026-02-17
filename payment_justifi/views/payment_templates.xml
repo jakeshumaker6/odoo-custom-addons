@@ -13,6 +13,20 @@
                     )"
         />
 
+        <!-- Hide Odoo's default payment method placeholder image -->
+        <style>
+            /* Hide the large placeholder image in payment method selection */
+            .o_payment_form .card .o_payment_option_card img.img-fluid,
+            .o_payment_form .card img[src*="placeholder"],
+            .o_payment_form .card img[src*="image_128"],
+            .o_payment_form .o_payment_option_card .float-end img,
+            .o_payment_form img.mw-100.rounded,
+            /* Target the specific placeholder shown in portal payment forms */
+            .card-body img.img-fluid.mw-100.rounded {
+                display: none !important;
+            }
+        </style>
+
         <!-- Load JustiFi web components -->
         <script type="module" src="https://cdn.jsdelivr.net/npm/@justifi/webcomponents@6.7.3/dist/webcomponents/webcomponents.esm.js"/>
 
