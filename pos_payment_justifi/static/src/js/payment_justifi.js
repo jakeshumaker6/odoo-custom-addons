@@ -14,53 +14,59 @@ export class PaymentJustifi extends PaymentInterface {
     /**
      * Setup the payment interface
      */
-    setup() {
-        super.setup(...arguments);
+    setup(pos, payment_method_id) {
+        super.setup(pos, payment_method_id);
         this.pollingInterval = null;
         this.pollingTimeout = null;
     }
 
     /**
+     * Get the pending payment line for JustiFi.
+     */
+    pendingJustifiLine() {
+        return this.pos.getPendingPaymentLine("justifi");
+    }
+
+    /**
      * Send a payment request to the JustiFi terminal.
      *
-     * @param {string} cid - The payment line client ID
+     * @param {string} uuid - The payment line UUID
      * @returns {Promise<boolean>} - True if successful
      */
-    async send_payment_request(cid) {
-        await super.send_payment_request(...arguments);
+    async sendPaymentRequest(uuid) {
+        super.sendPaymentRequest(uuid);
 
-        const paymentLine = this.pos.getPendingPaymentLine(cid);
+        const paymentLine = this.pendingJustifiLine();
         if (!paymentLine) {
-            console.error("JustiFi: Payment line not found", cid);
+            console.error("JustiFi: Payment line not found", uuid);
             return false;
         }
 
-        const paymentMethod = paymentLine.payment_method_id;
-        const terminalId = paymentMethod.justifi_terminal_id;
+        const terminalId = this.payment_method_id.justifi_terminal_id;
 
         if (!terminalId) {
             this._showError(_t("JustiFi Terminal ID is not configured."));
             return false;
         }
 
-        paymentLine.set_payment_status("waitingCard");
+        paymentLine.setPaymentStatus("waitingCard");
 
         try {
             // Send payment request to backend
-            const result = await this.env.services.orm.silent.call(
+            const result = await this.pos.data.silentCall(
                 "pos.payment.method",
                 "justifi_payment_request",
-                [[paymentMethod.id]],
+                [[this.payment_method_id.id]],
                 {
                     amount: paymentLine.amount,
                     currency_id: this.pos.currency.id,
-                    pos_order_id: this.pos.get_order().name,
+                    pos_order_id: this.pos.getOrder().name,
                 }
             );
 
             if (result.error) {
                 this._showError(result.error);
-                paymentLine.set_payment_status("retry");
+                paymentLine.setPaymentStatus("retry");
                 return false;
             }
 
@@ -72,12 +78,12 @@ export class PaymentJustifi extends PaymentInterface {
             console.log("JustiFi: Payment sent to terminal", result);
 
             // Start polling for payment status
-            return await this._pollPaymentStatus(paymentLine, cid);
+            return await this._pollPaymentStatus(paymentLine, uuid);
 
         } catch (error) {
             console.error("JustiFi: Payment request error", error);
             this._showError(_t("Failed to send payment to terminal. Please try again."));
-            paymentLine.set_payment_status("retry");
+            paymentLine.setPaymentStatus("retry");
             return false;
         }
     }
@@ -86,10 +92,10 @@ export class PaymentJustifi extends PaymentInterface {
      * Poll for payment status until completed or timeout.
      *
      * @param {Object} paymentLine - The payment line
-     * @param {string} cid - The payment line client ID
+     * @param {string} uuid - The payment line UUID
      * @returns {Promise<boolean>} - True if payment successful
      */
-    async _pollPaymentStatus(paymentLine, cid) {
+    async _pollPaymentStatus(paymentLine, uuid) {
         const MAX_POLL_TIME = 120000; // 2 minutes
         const POLL_INTERVAL = 2000; // 2 seconds
         const startTime = Date.now();
@@ -107,14 +113,14 @@ export class PaymentJustifi extends PaymentInterface {
                 if (Date.now() - startTime > MAX_POLL_TIME) {
                     console.warn("JustiFi: Payment polling timeout");
                     this._stopPolling();
-                    paymentLine.set_payment_status("timeout");
+                    paymentLine.setPaymentStatus("timeout");
                     this._showError(_t("Payment timeout. Please check the terminal."));
                     resolve(false);
                     return;
                 }
 
                 try {
-                    const status = await this.env.services.orm.silent.call(
+                    const status = await this.pos.data.silentCall(
                         "pos.payment.method",
                         "justifi_payment_status",
                         [],
@@ -132,7 +138,7 @@ export class PaymentJustifi extends PaymentInterface {
                     } else if (status.is_paid) {
                         // Payment successful
                         this._stopPolling();
-                        paymentLine.set_payment_status("done");
+                        paymentLine.setPaymentStatus("done");
                         paymentLine.justifi_payment_id = status.payment_id;
                         paymentLine.transaction_id = status.payment_id || status.checkout_id;
                         console.log("JustiFi: Payment successful", status);
@@ -141,7 +147,7 @@ export class PaymentJustifi extends PaymentInterface {
                     } else if (status.is_failed) {
                         // Payment failed
                         this._stopPolling();
-                        paymentLine.set_payment_status("retry");
+                        paymentLine.setPaymentStatus("retry");
                         this._showError(_t("Payment was declined or cancelled."));
                         resolve(false);
                         return;
@@ -179,23 +185,23 @@ export class PaymentJustifi extends PaymentInterface {
     /**
      * Cancel the current payment request.
      *
-     * @param {boolean} force - Force cancel
-     * @param {string} cid - The payment line client ID
+     * @param {Object} order - The POS order
+     * @param {string} uuid - The payment line UUID
      * @returns {Promise<boolean>} - True if cancelled
      */
-    async send_payment_cancel(force = false, cid = null) {
-        await super.send_payment_cancel(...arguments);
+    async sendPaymentCancel(order, uuid) {
+        super.sendPaymentCancel(order, uuid);
 
         this._stopPolling();
 
-        const paymentLine = cid ? this.pos.getPendingPaymentLine(cid) : this.pos.get_order()?.selected_paymentline;
+        const paymentLine = this.pendingJustifiLine();
 
         if (!paymentLine || !paymentLine.justifi_checkout_id) {
             return true;
         }
 
         try {
-            const result = await this.env.services.orm.silent.call(
+            const result = await this.pos.data.silentCall(
                 "pos.payment.method",
                 "justifi_cancel_payment",
                 [],
@@ -206,14 +212,10 @@ export class PaymentJustifi extends PaymentInterface {
             );
 
             console.log("JustiFi: Cancel result", result);
-
-            paymentLine.set_payment_status("cancelled");
             return true;
 
         } catch (error) {
             console.error("JustiFi: Cancel error", error);
-            // Still mark as cancelled locally
-            paymentLine.set_payment_status("retry");
             return true;
         }
     }
@@ -223,7 +225,6 @@ export class PaymentJustifi extends PaymentInterface {
      */
     close() {
         this._stopPolling();
-        super.close();
     }
 
     /**
