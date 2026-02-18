@@ -2,10 +2,12 @@
 
 import json
 import logging
+import os
 import uuid
 
 from odoo import http
 from odoo.http import request
+from odoo.modules.module import get_module_path
 
 _logger = logging.getLogger(__name__)
 
@@ -15,6 +17,31 @@ TERMINALS_URL = 'https://api.justifi.ai/v1/terminals'
 
 class PosJustiFiController(http.Controller):
     """Controller for JustiFi POS terminal payments."""
+
+    @http.route('/point_of_sale/static/img/providers/justifi.png', type='http', auth='public', methods=['GET'], csrf=False)
+    def justifi_provider_icon(self):
+        """
+        Serve the JustiFi provider icon at the path expected by the POS payment provider cards.
+
+        The POS module looks for provider icons at /point_of_sale/static/img/providers/{selection}.png
+        We intercept this request and serve our icon from our module.
+        """
+        module_path = get_module_path('pos_payment_justifi')
+        icon_path = os.path.join(module_path, 'static', 'img', 'providers', 'justifi.png')
+
+        if os.path.exists(icon_path):
+            with open(icon_path, 'rb') as f:
+                icon_data = f.read()
+            return request.make_response(
+                icon_data,
+                headers=[
+                    ('Content-Type', 'image/png'),
+                    ('Cache-Control', 'public, max-age=86400'),
+                ]
+            )
+        else:
+            # Fallback to 404
+            return request.not_found()
 
     @http.route('/pos_justifi/payment_request', type='jsonrpc', auth='user', methods=['POST'])
     def payment_request(self, payment_method_id, amount, currency_id, pos_order_id=None):
