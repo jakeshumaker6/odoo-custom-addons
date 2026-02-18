@@ -2,7 +2,7 @@
 
 {
     'name': 'POS Payment: JustiFi Terminal',
-    'version': '19.0.1.0.5',
+    'version': '19.0.1.0.6',
     'category': 'Sales/Point of Sale',
     'summary': 'Accept card payments via JustiFi terminals in Point of Sale.',
     'description': """

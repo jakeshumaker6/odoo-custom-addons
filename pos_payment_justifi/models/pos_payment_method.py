@@ -246,9 +246,11 @@ class PosPaymentMethod(models.Model):
             'Idempotency-Key': str(uuid.uuid4()),
         }
 
-        url = f'{TERMINALS_URL}/{terminal_id}/pay'
+        # Correct endpoint: POST /v1/terminals/pay (terminal_id in body, not URL)
+        url = f'{TERMINALS_URL}/pay'
         payload = {
             'checkout_id': checkout_id,
+            'terminal_id': terminal_id,
         }
 
         _logger.info("JustiFi POS: Sending to terminal %s: %s", terminal_id, payload)
