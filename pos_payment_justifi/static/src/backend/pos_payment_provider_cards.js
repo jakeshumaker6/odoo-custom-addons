@@ -1,110 +1,46 @@
 /** @odoo-module */
 
-import { Component, onWillStart, useState } from "@odoo/owl";
-import { useService } from "@web/core/utils/hooks";
-import { standardWidgetProps } from "@web/views/widgets/standard_widget_props";
-import { registry } from "@web/core/registry";
+import { patch } from "@web/core/utils/patch";
+import { PosPaymentProviderCards } from "@point_of_sale/backend/pos_payment_provider_cards/pos_payment_provider_cards";
+import { onWillStart } from "@odoo/owl";
 
 /**
- * Extended PosPaymentProviderCards that includes JustiFi.
+ * Patch the PosPaymentProviderCards component to add JustiFi as a provider option.
  *
- * This replaces the original widget to add JustiFi Terminal as an option
- * in the payment provider cards UI.
+ * This patches the setup method to inject JustiFi into the providers list
+ * after the original providers are loaded.
  */
-export class PosPaymentProviderCardsJustifi extends Component {
-    static template = "point_of_sale.PosPaymentProviderCards";
-    static components = {};
-    static props = {
-        ...standardWidgetProps,
-    };
-
+patch(PosPaymentProviderCards.prototype, {
     setup() {
         super.setup();
-        this.orm = useService("orm");
-        this.action = useService("action");
-        this.state = useState({
-            providers: [],
-            disabled: false,
-        });
+
+        // Store reference to original state for patching
+        const originalState = this.state;
 
         onWillStart(async () => {
-            const res = await this.orm.call("pos.payment.method", "get_provider_status", [
-                providers.map((p) => p[1]),
+            // After the original onWillStart runs, add JustiFi if module is available
+            // Check if JustiFi module is installed
+            const justifiModule = await this.orm.call("ir.module.module", "search_read", [
+                [["name", "=", "pos_payment_justifi"], ["state", "=", "installed"]],
+                ["id", "name", "state"],
             ]);
 
-            this.state.providers = providers
-                .filter((prov) => res.state.some((moduleState) => moduleState.name === prov[1]))
-                .map((prov) => {
-                    const status = res.state.find((p) => p.name === prov[1]);
-                    return Object.assign(
-                        {
-                            selection: prov[0],
-                            provider: prov[2],
-                        },
-                        status
-                    );
-                });
-        });
-    }
+            if (justifiModule.length > 0) {
+                // Add JustiFi to the providers list
+                const justifiProvider = {
+                    selection: "justifi",
+                    provider: "JustiFi",
+                    id: justifiModule[0].id,
+                    name: "pos_payment_justifi",
+                    state: "installed",
+                };
 
-    get config_ids() {
-        return this.props.record.evalContext.context.config_ids;
-    }
-
-    async installModule(moduleId) {
-        const recordSave = await this.props.record.save();
-        if (!recordSave) {
-            return;
-        }
-        this.state.disabled = true;
-        await this.orm
-            .call("ir.module.module", "button_immediate_install", [moduleId])
-            .then((result) => {
-                this.state.disabled = false;
-                if (result) {
-                    window.location.reload();
+                // Check if JustiFi is already in the list
+                const exists = originalState.providers.some(p => p.selection === "justifi");
+                if (!exists) {
+                    originalState.providers.push(justifiProvider);
                 }
-            })
-            .finally(() => {
-                this.state.disabled = false;
-            });
-    }
-
-    async setupProvider(moduleId) {
-        const provider = this.state.providers.find((p) => p.id === moduleId);
-        if (provider) {
-            this.props.record.update({
-                payment_method_type: "terminal",
-                use_payment_terminal: provider.selection,
-                name: provider.provider,
-            });
-        }
-    }
-}
-
-// Selection, module_name, friendly name
-// This list includes all original providers PLUS JustiFi
-const providers = [
-    ["ingenico", "pos_iot_ingenico", "Ingenico"],
-    ["six_iot", "pos_iot_six", "SIX"],
-    ["adyen", "pos_adyen", "Adyen"],
-    ["mercado_pago", "pos_mercado_pago", "Mercado Pago"],
-    ["razorpay", "pos_razorpay", "Razorpay"],
-    ["stripe", "pos_stripe", "Stripe"],
-    ["viva_com", "pos_viva_com", "Viva.com"],
-    ["worldline", "pos_iot_worldline", "Worldline"],
-    ["tyro", "pos_tyro", "Tyro"],
-    ["pine_labs", "pos_pine_labs", "Pine Labs"],
-    ["qfpay", "pos_qfpay", "QFPay"],
-    ["dpopay", "pos_dpopay", "DPO Pay"],
-    ["mollie", "pos_mollie", "Mollie"],
-    // JustiFi Terminal - added by pos_payment_justifi module
-    ["justifi", "pos_payment_justifi", "JustiFi"],
-];
-
-export const PosPaymentProviderCardsJustifiParams = {
-    component: PosPaymentProviderCardsJustifi,
-};
-
-// Replace the original widget with our extended version
-registry.category("view_widgets").add("pos_payment_provider_cards", PosPaymentProviderCardsJustifiParams, { force: true });
+            }
+        });
+    },
+});
