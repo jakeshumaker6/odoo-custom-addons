@@ -16,7 +16,7 @@ TERMINALS_URL = 'https://api.justifi.ai/v1/terminals'
 class PosJustiFiController(http.Controller):
     """Controller for JustiFi POS terminal payments."""
 
-    @http.route('/pos_justifi/payment_request', type='json', auth='user', methods=['POST'])
+    @http.route('/pos_justifi/payment_request', type='jsonrpc', auth='user', methods=['POST'])
     def payment_request(self, payment_method_id, amount, currency_id, pos_order_id=None):
         """
         Initiate a payment request to a JustiFi terminal.
@@ -102,7 +102,7 @@ class PosJustiFiController(http.Controller):
             _logger.exception("JustiFi POS: Error initiating payment: %s", str(e))
             return {'error': str(e)}
 
-    @http.route('/pos_justifi/payment_status', type='json', auth='user', methods=['POST'])
+    @http.route('/pos_justifi/payment_status', type='jsonrpc', auth='user', methods=['POST'])
     def payment_status(self, checkout_id, terminal_action_id=None):
         """
         Check the status of a terminal payment.
@@ -144,7 +144,7 @@ class PosJustiFiController(http.Controller):
             _logger.exception("JustiFi POS: Error checking status: %s", str(e))
             return {'error': str(e)}
 
-    @http.route('/pos_justifi/cancel_payment', type='json', auth='user', methods=['POST'])
+    @http.route('/pos_justifi/cancel_payment', type='jsonrpc', auth='user', methods=['POST'])
     def cancel_payment(self, checkout_id, terminal_id):
         """
         Cancel a pending terminal payment.
