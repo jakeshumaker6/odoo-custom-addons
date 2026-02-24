@@ -390,16 +390,16 @@ class PaymentProvider(models.Model):
             invoice = tx.invoice_ids[0]
             _logger.info("JustiFi: Found invoice %s from transaction", invoice.name)
 
-        # If no transaction/invoice found, try to find invoice by partner and amount
+        # If no transaction/invoice found, try to find invoice by amount
         _logger.info("JustiFi: Invoice lookup - tx=%s, partner_id=%s, amount=%s, type=%s",
                     tx, partner_id, amount, type(amount))
-        if not invoice and partner_id and amount:
+        if not invoice and amount:
             # Use rounded comparison for amount (avoids float precision issues)
             rounded_amount = round(float(amount), 2)
-            _logger.info("JustiFi: Searching for invoice with partner_id=%s, amount=%s (rounded=%s)",
-                        partner_id, amount, rounded_amount)
+            _logger.info("JustiFi: Searching for invoice with amount=%s (rounded=%s)",
+                        amount, rounded_amount)
 
-            # First try with exact partner_id
+            # Search for unpaid invoices, ordered by most recent first
             invoices = self.env['account.move'].sudo().search([
                 ('move_type', '=', 'out_invoice'),
                 ('state', '=', 'posted'),
@@ -407,16 +407,27 @@ class PaymentProvider(models.Model):
             ], order='id desc', limit=10)
 
             _logger.info("JustiFi: Found %s unpaid invoices to check", len(invoices))
+
+            # First pass: try to match by both partner and amount
             for inv in invoices:
                 _logger.info("JustiFi:   - %s: partner=%s, residual=%s, methods=%s",
                             inv.name, inv.partner_id.id, inv.amount_residual, inv.justifi_payment_methods)
                 if inv.partner_id.id == partner_id and abs(inv.amount_residual - rounded_amount) < 0.01:
                     invoice = inv
-                    _logger.info("JustiFi: Matched invoice %s", invoice.name)
+                    _logger.info("JustiFi: Matched invoice %s (partner + amount match)", invoice.name)
                     break
 
+            # Second pass: if no partner match, just match by amount (take most recent)
             if not invoice:
-                _logger.info("JustiFi: No invoice matched partner_id=%s, amount=%s", partner_id, rounded_amount)
+                for inv in invoices:
+                    if abs(inv.amount_residual - rounded_amount) < 0.01:
+                        invoice = inv
+                        _logger.info("JustiFi: Matched invoice %s (amount-only match, partner mismatch: template=%s, invoice=%s)",
+                                    invoice.name, partner_id, inv.partner_id.id)
+                        break
+
+            if not invoice:
+                _logger.info("JustiFi: No invoice matched amount=%s", rounded_amount)
 
         # Apply invoice-level payment methods setting
         if invoice and invoice.justifi_payment_methods:
