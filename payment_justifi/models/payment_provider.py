@@ -383,11 +383,30 @@ class PaymentProvider(models.Model):
 
         # Determine payment methods - use invoice setting if available, else provider default
         payment_methods = self.justifi_payment_methods or 'both'
+
+        # Try to get invoice setting from transaction first
+        invoice = None
         if tx and tx.invoice_ids:
             invoice = tx.invoice_ids[0]
-            if invoice.justifi_payment_methods:
-                payment_methods = invoice.justifi_payment_methods
-                _logger.info("JustiFi: Using invoice-level payment methods: %s", payment_methods)
+            _logger.info("JustiFi: Found invoice %s from transaction", invoice.name)
+
+        # If no transaction/invoice found, try to find invoice by partner and amount
+        if not invoice and partner_id and amount:
+            invoice = self.env['account.move'].sudo().search([
+                ('partner_id', '=', partner_id),
+                ('amount_residual', '=', amount),
+                ('move_type', '=', 'out_invoice'),
+                ('state', '=', 'posted'),
+                ('payment_state', 'in', ['not_paid', 'partial']),
+            ], order='id desc', limit=1)
+            if invoice:
+                _logger.info("JustiFi: Found invoice %s by partner/amount lookup", invoice.name)
+
+        # Apply invoice-level payment methods setting
+        if invoice and invoice.justifi_payment_methods:
+            payment_methods = invoice.justifi_payment_methods
+            _logger.info("JustiFi: Using invoice-level payment methods: %s (from %s)",
+                        payment_methods, invoice.name)
 
         return {
             'checkout_id': checkout_id,
