@@ -95,12 +95,18 @@ patch(DateTimeInput.prototype, {
 /**
  * Also add a global listener as a fallback for date inputs that might not
  * use the DateTimeInput component directly.
+ *
+ * Use 'keyup' instead of 'input' to avoid interfering with Odoo's input handling.
  */
-document.addEventListener('input', (ev) => {
+document.addEventListener('keyup', (ev) => {
     const input = ev.target;
 
+    // Only process digit keys
+    if (!/^\d$/.test(ev.key)) {
+        return;
+    }
+
     // Check if this is a date-related input field
-    // Look for inputs with date-related classes or attributes
     if (input.tagName !== 'INPUT') {
         return;
     }
@@ -132,9 +138,6 @@ document.addEventListener('input', (ev) => {
             const addedChars = formatted.length - value.length;
             const newPos = Math.min(cursorPos + addedChars, formatted.length);
             input.setSelectionRange(newPos, newPos);
-
-            // Trigger input event for Odoo's reactive system
-            input.dispatchEvent(new Event('input', { bubbles: true }));
         }
     }
 }, true);

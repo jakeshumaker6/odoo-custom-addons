@@ -2,7 +2,7 @@
 
 {
     'name': 'Date Format Helper',
-    'version': '19.0.1.0.0',
+    'version': '19.0.1.0.1',
     'category': 'Tools',
     'summary': 'Auto-format date input for faster entry (type 021906 for 02/19/06)',
     'description': """
