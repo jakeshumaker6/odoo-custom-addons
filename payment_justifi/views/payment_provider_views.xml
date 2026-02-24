@@ -32,6 +32,9 @@
                            string="Webhook Secret"
                            password="True"
                            placeholder="Optional: For webhook signature verification"/>
+                    <field name="justifi_payment_methods"
+                           string="Payment Methods"
+                           widget="radio"/>
                 </group>
             </group>
         </field>

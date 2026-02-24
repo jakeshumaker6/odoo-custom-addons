@@ -11,7 +11,9 @@ from ..const import (
     CHECKOUTS_URL,
     WEB_COMPONENT_TOKEN_URL,
     SUPPORTED_CURRENCIES,
-    PAYMENT_METHOD_CODES,
+    PAYMENT_METHOD_CODES_CARD,
+    PAYMENT_METHOD_CODES_ACH,
+    PAYMENT_METHOD_CODES_BOTH,
 )
 
 _logger = logging.getLogger(__name__)
@@ -53,6 +55,17 @@ class PaymentProvider(models.Model):
         string="Webhook Secret",
         help="Your JustiFi Webhook Secret for signature verification.",
         groups='base.group_system',
+    )
+    justifi_payment_methods = fields.Selection(
+        selection=[
+            ('card', 'Card Only'),
+            ('ach', 'ACH/Bank Account Only'),
+            ('both', 'Card and ACH'),
+        ],
+        string="Payment Methods",
+        default='card',
+        help="Select which payment methods to enable for customers.",
+        required_if_provider='justifi',
     )
 
     # === CONSTRAINT METHODS ===#
@@ -97,9 +110,15 @@ class PaymentProvider(models.Model):
         return super()._get_supported_currencies()
 
     def _get_default_payment_method_codes(self):
-        """ Override to return JustiFi's default payment method codes. """
+        """ Override to return JustiFi's default payment method codes based on config. """
         if self.code == 'justifi':
-            return PAYMENT_METHOD_CODES
+            payment_methods = self.justifi_payment_methods or 'card'
+            if payment_methods == 'both':
+                return PAYMENT_METHOD_CODES_BOTH
+            elif payment_methods == 'ach':
+                return PAYMENT_METHOD_CODES_ACH
+            else:
+                return PAYMENT_METHOD_CODES_CARD
         return super()._get_default_payment_method_codes()
 
     def _should_build_inline_form(self, is_validation=False):
@@ -368,6 +387,7 @@ class PaymentProvider(models.Model):
             'account_id': self.justifi_account_id,
             'payment_method_group_id': self.justifi_payment_method_group_id or '',
             'api_url': '/payment/justifi/complete',
+            'payment_methods': self.justifi_payment_methods or 'card',
         }
 
     def _justifi_get_checkout(self, checkout_id):

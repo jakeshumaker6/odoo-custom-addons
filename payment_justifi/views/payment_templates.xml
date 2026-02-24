@@ -59,10 +59,12 @@
             </div>
 
             <!-- Static JustiFi component structure - attributes set directly from template values -->
+            <!-- Payment methods: 'card' = card only, 'ach' = ACH only, 'both' = both enabled -->
             <justifi-tokenize-payment-method
                 t-att-auth-token="jf_values.get('auth_token', '')"
                 t-att-account-id="jf_values.get('account_id', '')"
-                disable-bank-account="true"
+                t-att-disable-bank-account="'true' if jf_values.get('payment_methods') == 'card' else 'false'"
+                t-att-disable-credit-card="'true' if jf_values.get('payment_methods') == 'ach' else 'false'"
                 hide-submit-button="true"
                 style="display: none;"
                 id="justifi-tokenize">

@@ -13,7 +13,9 @@ WEBCOMPONENTS_CDN_URL = 'https://cdn.jsdelivr.net/npm/@justifi/webcomponents@lat
 SUPPORTED_CURRENCIES = ['USD']
 
 # Payment method codes
-PAYMENT_METHOD_CODES = ['card']
+PAYMENT_METHOD_CODES_CARD = ['card']
+PAYMENT_METHOD_CODES_ACH = ['bank_sepa']  # ACH/bank transfer
+PAYMENT_METHOD_CODES_BOTH = ['card', 'bank_sepa']
 
 # Transaction states mapping from JustiFi to Odoo
 STATUS_MAPPING = {
