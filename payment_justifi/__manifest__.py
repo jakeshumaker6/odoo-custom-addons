@@ -2,7 +2,7 @@
 
 {
     'name': 'Payment Provider: JustiFi',
-    'version': '19.0.1.0.20',
+    'version': '19.0.1.0.21',
     'category': 'Accounting/Payment Providers',
     'summary': 'Accept card and ACH payments via JustiFi payment processor.',
     'description': """
@@ -16,6 +16,7 @@ Features:
 - Card payments via JustiFi modular checkout
 - ACH/bank account payments
 - Configurable payment methods (Card, ACH, or Both)
+- Per-invoice payment method selection
 - Secure tokenization (no card data stored in Odoo)
 - Webhook support for real-time payment status updates
 - Customer portal integration
@@ -30,6 +31,7 @@ Configuration:
     'depends': ['payment', 'account', 'portal'],
     'data': [
         'views/payment_provider_views.xml',
+        'views/account_move_views.xml',
         'views/payment_templates.xml',
         'data/payment_provider_data.xml',
     ],

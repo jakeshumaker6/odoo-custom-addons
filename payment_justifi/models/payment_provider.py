@@ -63,7 +63,7 @@ class PaymentProvider(models.Model):
             ('both', 'Card and ACH'),
         ],
         string="Payment Methods",
-        default='card',
+        default='both',
         help="Select which payment methods to enable for customers.",
         required_if_provider='justifi',
     )
@@ -381,13 +381,21 @@ class PaymentProvider(models.Model):
         # Get web component token
         auth_token = self._justifi_get_web_component_token(checkout_id)
 
+        # Determine payment methods - use invoice setting if available, else provider default
+        payment_methods = self.justifi_payment_methods or 'both'
+        if tx and tx.invoice_ids:
+            invoice = tx.invoice_ids[0]
+            if invoice.justifi_payment_methods:
+                payment_methods = invoice.justifi_payment_methods
+                _logger.info("JustiFi: Using invoice-level payment methods: %s", payment_methods)
+
         return {
             'checkout_id': checkout_id,
             'auth_token': auth_token,
             'account_id': self.justifi_account_id,
             'payment_method_group_id': self.justifi_payment_method_group_id or '',
             'api_url': '/payment/justifi/complete',
-            'payment_methods': self.justifi_payment_methods or 'card',
+            'payment_methods': payment_methods,
         }
 
     def _justifi_get_checkout(self, checkout_id):

@@ -68,12 +68,21 @@ class PaymentTransaction(models.Model):
             self.reference, checkout_id
         )
 
+        # Determine payment methods - use invoice setting if available, else provider default
+        payment_methods = provider.justifi_payment_methods or 'both'
+        if self.invoice_ids:
+            # Use the first invoice's payment method setting if set
+            invoice = self.invoice_ids[0]
+            if invoice.justifi_payment_methods:
+                payment_methods = invoice.justifi_payment_methods
+
         res.update({
             'checkout_id': checkout_id,
             'auth_token': auth_token,
             'account_id': provider.justifi_account_id,
             'payment_method_group_id': provider.justifi_payment_method_group_id or '',
             'api_url': f"/payment/justifi/complete",
+            'payment_methods': payment_methods,
         })
 
         return res
