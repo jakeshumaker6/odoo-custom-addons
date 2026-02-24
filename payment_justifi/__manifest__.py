@@ -2,7 +2,7 @@
 
 {
     'name': 'Payment Provider: JustiFi',
-    'version': '19.0.1.0.21',
+    'version': '19.0.1.0.22',
     'category': 'Accounting/Payment Providers',
     'summary': 'Accept card and ACH payments via JustiFi payment processor.',
     'description': """
@@ -38,4 +38,5 @@ Configuration:
     'application': False,
     'installable': True,
     'license': 'LGPL-3',
+    'post_init_hook': '_post_init_hook',
 }

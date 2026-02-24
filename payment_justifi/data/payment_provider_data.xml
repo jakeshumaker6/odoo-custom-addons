@@ -11,7 +11,7 @@
             <field name="is_published">False</field>
             <field name="inline_form_view_id" ref="payment_justifi.inline_form"/>
             <field name="pre_msg">
-                <![CDATA[<p>Pay securely with your credit or debit card via JustiFi.</p>]]>
+                <![CDATA[<p>Pay securely with your credit card, debit card, or bank account via JustiFi.</p>]]>
             </field>
             <field name="pending_msg">
                 <![CDATA[<p>Your payment is being processed. You will receive a confirmation once the payment is complete.</p>]]>
