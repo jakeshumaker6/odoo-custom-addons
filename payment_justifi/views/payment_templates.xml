@@ -60,15 +60,37 @@
 
             <!-- Static JustiFi component structure - attributes set directly from template values -->
             <!-- Payment methods: 'card' = card only, 'ach' = ACH only, 'both' = both enabled -->
-            <justifi-tokenize-payment-method
-                t-att-auth-token="jf_values.get('auth_token', '')"
-                t-att-account-id="jf_values.get('account_id', '')"
-                t-att-disable-bank-account="'true' if jf_values.get('payment_methods') == 'card' else 'false'"
-                t-att-disable-credit-card="'true' if jf_values.get('payment_methods') == 'ach' else 'false'"
-                hide-submit-button="true"
-                style="display: none;"
-                id="justifi-tokenize">
-            </justifi-tokenize-payment-method>
+            <!-- Note: Boolean attributes should only be present when true, not set to "false" -->
+            <t t-if="jf_values.get('payment_methods') == 'card'">
+                <justifi-tokenize-payment-method
+                    t-att-auth-token="jf_values.get('auth_token', '')"
+                    t-att-account-id="jf_values.get('account_id', '')"
+                    disable-bank-account="true"
+                    hide-submit-button="true"
+                    style="display: none;"
+                    id="justifi-tokenize">
+                </justifi-tokenize-payment-method>
+            </t>
+            <t t-elif="jf_values.get('payment_methods') == 'ach'">
+                <justifi-tokenize-payment-method
+                    t-att-auth-token="jf_values.get('auth_token', '')"
+                    t-att-account-id="jf_values.get('account_id', '')"
+                    disable-credit-card="true"
+                    hide-submit-button="true"
+                    style="display: none;"
+                    id="justifi-tokenize">
+                </justifi-tokenize-payment-method>
+            </t>
+            <t t-else="">
+                <!-- Both card and ACH enabled -->
+                <justifi-tokenize-payment-method
+                    t-att-auth-token="jf_values.get('auth_token', '')"
+                    t-att-account-id="jf_values.get('account_id', '')"
+                    hide-submit-button="true"
+                    style="display: none;"
+                    id="justifi-tokenize">
+                </justifi-tokenize-payment-method>
+            </t>
 
             <!-- Submit button -->
             <div id="justifi-submit-container" style="display: none;" class="mt-3">
