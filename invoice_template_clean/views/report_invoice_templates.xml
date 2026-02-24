@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Override tax totals template to:
+        1. Change "Untaxed Amount" to "Subtotal"
+        2. Hide tax lines when tax amount is zero
+    -->
+    <template id="document_tax_totals_clean" inherit_id="account.document_tax_totals_template">
+
+        <!-- Change "Untaxed Amount" default text to "Subtotal" -->
+        <xpath expr="//tr[hasclass('o_subtotal')]//span[@t-out=\"subtotal['name']\"]" position="replace">
+            <span t-out="subtotal['name'].replace('Untaxed Amount', 'Subtotal') if subtotal['name'] == 'Untaxed Amount' else subtotal['name']">Subtotal</span>
+        </xpath>
+
+        <!-- Hide tax lines when tax amount is zero -->
+        <xpath expr="//tr[hasclass('o_taxes')]" position="attributes">
+            <attribute name="t-if">tax_group['tax_amount_currency'] != 0</attribute>
+        </xpath>
+
+    </template>
+</odoo>
