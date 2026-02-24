@@ -6,32 +6,37 @@ from . import controllers
 
 def _post_init_hook(env):
     """
-    Link JustiFi provider to Card and Bank payment methods after installation.
-    This ensures ACH/bank payments are available alongside card payments.
+    Link JustiFi provider to a single payment method that handles both Card and ACH.
+    The JustiFi web component internally handles card vs bank account selection.
     """
     # Find the JustiFi provider
     provider = env['payment.provider'].search([('code', '=', 'justifi')], limit=1)
     if not provider:
         return
 
-    # Find and link Card payment method
-    card_method = env['payment.method'].search([('code', '=', 'card')], limit=1)
-    if card_method and provider not in card_method.provider_ids:
-        card_method.write({'provider_ids': [(4, provider.id)]})
-
-    # Find and link Bank/ACH payment method (try multiple codes)
-    for bank_code in ['bank_sepa', 'sepa', 'bank']:
-        bank_method = env['payment.method'].search([('code', '=', bank_code)], limit=1)
-        if bank_method:
-            if provider not in bank_method.provider_ids:
-                bank_method.write({'provider_ids': [(4, provider.id)]})
-            break
+    # Find or create a JustiFi payment method (handles both card and ACH)
+    # We use bank_sepa code but name it to reflect both options
+    justifi_method = env['payment.method'].search([('code', '=', 'bank_sepa')], limit=1)
+    if justifi_method:
+        # Ensure JustiFi is linked and name is correct
+        updates = {}
+        if provider not in justifi_method.provider_ids:
+            updates['provider_ids'] = [(4, provider.id)]
+        if 'JustiFi' not in justifi_method.name:
+            updates['name'] = 'JustiFi (Card / ACH)'
+        if updates:
+            justifi_method.write(updates)
     else:
-        # If no bank method exists, create one for ACH
+        # Create the payment method
         env['payment.method'].create({
-            'name': 'Bank Account / ACH',
+            'name': 'JustiFi (Card / ACH)',
             'code': 'bank_sepa',
             'sequence': 20,
             'active': True,
             'provider_ids': [(4, provider.id)],
         })
+
+    # Remove JustiFi from Card payment method if present (avoid duplicate options)
+    card_method = env['payment.method'].search([('code', '=', 'card')], limit=1)
+    if card_method and provider in card_method.provider_ids:
+        card_method.write({'provider_ids': [(3, provider.id)]})
