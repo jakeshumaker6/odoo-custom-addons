@@ -1,0 +1,147 @@
+/*
+ * South Forty Specialties - Portal Branding
+ * Primary: #CC6118 (Orange)
+ * Dark: #111111
+ * Accent: #F36936
+ */
+
+/* ===== LOGO SIZING ===== */
+/* Make header logo larger */
+header .navbar-brand img,
+.o_portal_navbar .navbar-brand img {
+    max-height: 80px !important;
+    height: auto !important;
+    width: auto !important;
+}
+
+/* Logo in sidebar */
+.o_portal_sidebar .navbar-brand img {
+    max-height: 70px !important;
+}
+
+/* ===== PRIMARY BUTTONS ===== */
+/* Primary action buttons (Pay Now, Confirm, etc.) */
+.btn-primary {
+    background-color: #CC6118 !important;
+    border-color: #CC6118 !important;
+    color: #FFFFFF !important;
+}
+
+.btn-primary:hover,
+.btn-primary:focus,
+.btn-primary:active {
+    background-color: #B55516 !important;
+    border-color: #B55516 !important;
+    color: #FFFFFF !important;
+}
+
+/* ===== SECONDARY/OUTLINE BUTTONS ===== */
+.btn-secondary {
+    background-color: #111111 !important;
+    border-color: #111111 !important;
+    color: #FFFFFF !important;
+}
+
+.btn-secondary:hover,
+.btn-secondary:focus {
+    background-color: #333333 !important;
+    border-color: #333333 !important;
+}
+
+.btn-outline-primary {
+    color: #CC6118 !important;
+    border-color: #CC6118 !important;
+}
+
+.btn-outline-primary:hover {
+    background-color: #CC6118 !important;
+    color: #FFFFFF !important;
+}
+
+/* ===== LINKS ===== */
+a {
+    color: #CC6118;
+}
+
+a:hover {
+    color: #F36936;
+}
+
+/* Portal specific links */
+.o_portal a:not(.btn) {
+    color: #CC6118;
+}
+
+.o_portal a:not(.btn):hover {
+    color: #F36936;
+}
+
+/* ===== BADGES & LABELS ===== */
+.badge-primary,
+.bg-primary {
+    background-color: #CC6118 !important;
+}
+
+/* ===== FORM ELEMENTS ===== */
+.form-control:focus,
+.form-select:focus {
+    border-color: #CC6118 !important;
+    box-shadow: 0 0 0 0.2rem rgba(204, 97, 24, 0.25) !important;
+}
+
+/* ===== NAVIGATION ===== */
+.nav-link.active,
+.nav-link:hover {
+    color: #CC6118 !important;
+}
+
+/* Portal sidebar active state */
+.o_portal_sidebar .nav-link.active {
+    border-left-color: #CC6118 !important;
+    color: #CC6118 !important;
+}
+
+/* ===== PROGRESS BARS ===== */
+.progress-bar {
+    background-color: #CC6118 !important;
+}
+
+/* ===== PAYMENT BUTTONS ===== */
+/* Make payment/action buttons stand out */
+#o_sale_portal_paynow,
+.o_portal_sale_sidebar .btn-primary,
+button[name="o_payment_submit_button"] {
+    background-color: #CC6118 !important;
+    border-color: #CC6118 !important;
+    font-weight: 600;
+}
+
+#o_sale_portal_paynow:hover,
+.o_portal_sale_sidebar .btn-primary:hover,
+button[name="o_payment_submit_button"]:hover {
+    background-color: #B55516 !important;
+    border-color: #B55516 !important;
+}
+
+/* ===== ALERTS ===== */
+.alert-info {
+    border-left-color: #CC6118;
+}
+
+/* ===== HEADINGS ===== */
+.o_portal h1, .o_portal h2, .o_portal h3,
+.o_portal h4, .o_portal h5, .o_portal h6 {
+    color: #111111;
+}
+
+/* ===== TABLES ===== */
+.table thead th {
+    background-color: #111111;
+    color: #FFFFFF;
+}
+
+/* ===== CARD STYLING ===== */
+.card-header {
+    background-color: #111111;
+    color: #FFFFFF;
+}
