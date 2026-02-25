@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-from odoo import models, fields
+from odoo import models, fields, api
 
 
 class MailComposeMessage(models.TransientModel):
@@ -11,23 +11,25 @@ class MailComposeMessage(models.TransientModel):
     )
 
     def _action_send_mail(self, auto_commit=False):
-        """Override to add CC to sent emails."""
-        # Store CC before sending
-        cc_to_add = self.email_cc
+        """Override to pass CC via context to mail.mail creation."""
+        # Pass the CC via context so mail.mail can pick it up
+        if self.email_cc:
+            self = self.with_context(composer_email_cc=self.email_cc)
+        return super()._action_send_mail(auto_commit=auto_commit)
 
-        # Call parent to send the mail
-        result = super()._action_send_mail(auto_commit=auto_commit)
 
-        # If CC was specified, update the mail.mail records that were just created
-        if cc_to_add and result:
-            mails, messages = result
-            if mails:
-                for mail in mails:
-                    # Combine with any existing CC (from template)
-                    existing_cc = mail.email_cc or ''
-                    if existing_cc:
-                        mail.email_cc = f"{existing_cc}, {cc_to_add}"
-                    else:
-                        mail.email_cc = cc_to_add
+class MailMail(models.Model):
+    _inherit = 'mail.mail'
 
-        return result
+    @api.model_create_multi
+    def create(self, vals_list):
+        """Override to add CC from composer context."""
+        composer_cc = self.env.context.get('composer_email_cc')
+        if composer_cc:
+            for vals in vals_list:
+                existing_cc = vals.get('email_cc', '')
+                if existing_cc:
+                    vals['email_cc'] = f"{existing_cc}, {composer_cc}"
+                else:
+                    vals['email_cc'] = composer_cc
+        return super().create(vals_list)
