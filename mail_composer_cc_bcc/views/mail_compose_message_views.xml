@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add CC field to mail composer form -->
+    <record id="view_mail_compose_message_cc" model="ir.ui.view">
+        <field name="name">mail.compose.message.form.cc</field>
+        <field name="model">mail.compose.message</field>
+        <field name="inherit_id" ref="mail.email_compose_message_wizard_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='subject']" position="after">
+                <field name="email_cc" string="Cc" placeholder="email@example.com, other@example.com"/>
+            </xpath>
+        </field>
+    </record>
+</odoo>
