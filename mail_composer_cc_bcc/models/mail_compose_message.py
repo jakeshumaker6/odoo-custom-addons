@@ -10,19 +10,24 @@ class MailComposeMessage(models.TransientModel):
         help='Carbon copy recipients (comma-separated email addresses)',
     )
 
-    def _prepare_mail_values(self, res_ids):
-        """Override to include CC in the mail values."""
-        results = super()._prepare_mail_values(res_ids)
+    def _action_send_mail(self, auto_commit=False):
+        """Override to add CC to sent emails."""
+        # Store CC before sending
+        cc_to_add = self.email_cc
 
-        # Add CC to each mail being prepared
-        if self.email_cc:
-            for res_id in res_ids:
-                if res_id in results:
-                    # Combine any existing CC (from template) with composer CC
-                    existing_cc = results[res_id].get('email_cc', '')
+        # Call parent to send the mail
+        result = super()._action_send_mail(auto_commit=auto_commit)
+
+        # If CC was specified, update the mail.mail records that were just created
+        if cc_to_add and result:
+            mails, messages = result
+            if mails:
+                for mail in mails:
+                    # Combine with any existing CC (from template)
+                    existing_cc = mail.email_cc or ''
                     if existing_cc:
-                        results[res_id]['email_cc'] = f"{existing_cc}, {self.email_cc}"
+                        mail.email_cc = f"{existing_cc}, {cc_to_add}"
                     else:
-                        results[res_id]['email_cc'] = self.email_cc
+                        mail.email_cc = cc_to_add
 
-        return results
+        return result
