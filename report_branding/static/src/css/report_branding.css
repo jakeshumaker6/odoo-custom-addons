@@ -1,0 +1,28 @@
+/*
+ * Report Branding - Larger Logo
+ * Applies to: Invoices, Sales Orders, Purchase Orders, etc.
+ */
+
+/* Make logo larger on all PDF reports */
+.o_company_logo {
+    max-height: 10rem !important;
+    max-width: 20rem !important;
+}
+
+.o_company_logo_big {
+    max-height: 12rem !important;
+    max-width: 24rem !important;
+}
+
+.o_company_logo_small {
+    max-height: 6rem !important;
+    max-width: 12rem !important;
+}
+
+/* Ensure logo container doesn't constrain the logo */
+.o_report_layout_boxed header .row,
+.o_report_layout_clean header .row,
+.o_report_layout_bold header .row,
+.o_report_layout_striped header .row {
+    align-items: flex-start;
+}
