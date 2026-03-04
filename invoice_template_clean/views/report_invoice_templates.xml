@@ -18,4 +18,9 @@
         </xpath>
 
     </template>
+
+    <!-- Hide bank account number from invoice payment communication section -->
+    <template id="report_invoice_hide_bank_account" inherit_id="account.report_invoice_document">
+        <xpath expr="//p[@name='payment_communication']//t[@t-if='o.partner_bank_id']" position="replace"/>
+    </template>
 </odoo>
