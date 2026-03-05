@@ -354,7 +354,7 @@ class JustiFiController(http.Controller):
                 checkout_id, payment_id
             )
 
-    @http.route('/payment/justifi/terminal_status', type='json', auth='user', methods=['POST'])
+    @http.route('/payment/justifi/terminal_status', type='jsonrpc', auth='user', methods=['POST'])
     def justifi_terminal_status(self, wizard_id, **kwargs):
         """
         Poll terminal payment status from the wizard.
