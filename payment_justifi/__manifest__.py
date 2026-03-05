@@ -2,7 +2,7 @@
 
 {
     'name': 'Payment Provider: JustiFi',
-    'version': '19.0.1.0.27',
+    'version': '19.0.1.0.28',
     'category': 'Accounting/Payment Providers',
     'summary': 'Accept card and ACH payments via JustiFi payment processor.',
     'description': """
@@ -30,8 +30,10 @@ Configuration:
     'website': 'https://justifi.ai/',
     'depends': ['payment', 'account', 'portal'],
     'data': [
+        'security/ir.model.access.csv',
         'views/payment_provider_views.xml',
         'views/account_move_views.xml',
+        'views/account_move_terminal_payment_views.xml',
         'views/payment_templates.xml',
         'data/payment_provider_data.xml',
     ],

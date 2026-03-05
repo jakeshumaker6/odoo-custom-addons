@@ -1,6 +1,7 @@
 # Part of Odoo. See LICENSE file for full copyright and licensing details.
 
 import logging
+import uuid
 import requests
 
 from odoo import api, fields, models, _
@@ -10,6 +11,7 @@ from ..const import (
     OAUTH_TOKEN_URL,
     CHECKOUTS_URL,
     WEB_COMPONENT_TOKEN_URL,
+    TERMINALS_URL,
     SUPPORTED_CURRENCIES,
     PAYMENT_METHOD_CODES_CARD,
     PAYMENT_METHOD_CODES_ACH,
@@ -546,3 +548,94 @@ class PaymentProvider(models.Model):
         _logger.info("JustiFi: Checkout completed. Status: %s", checkout_data.get('status'))
 
         return checkout_data
+
+    def _justifi_send_to_terminal(self, terminal_id, checkout_id):
+        """
+        Send a checkout to a JustiFi terminal for payment.
+
+        :param terminal_id: The terminal ID (trm_xxxxx)
+        :param checkout_id: The checkout ID (cho_xxxxx)
+        :return: API response dict with terminal action data
+        """
+        self.ensure_one()
+
+        access_token = self._justifi_get_access_token()
+
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+            'Sub-Account': self.justifi_account_id,
+            'Idempotency-Key': str(uuid.uuid4()),
+        }
+
+        url = f'{TERMINALS_URL}/pay'
+        payload = {
+            'checkout_id': checkout_id,
+            'terminal_id': terminal_id,
+        }
+
+        _logger.info("JustiFi: Sending checkout %s to terminal %s", checkout_id, terminal_id)
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+        except requests.exceptions.RequestException as e:
+            _logger.error("JustiFi: Network error sending to terminal: %s", str(e))
+            raise ValidationError(_("Could not connect to JustiFi terminal. Please try again."))
+
+        if response.status_code >= 400:
+            _logger.error(
+                "JustiFi: Failed to send to terminal. Status: %s, Response: %s",
+                response.status_code, response.text
+            )
+            error_msg = "Failed to send payment to terminal"
+            try:
+                error_data = response.json()
+                if 'error' in error_data and 'message' in error_data['error']:
+                    error_msg = error_data['error']['message']
+            except Exception:
+                pass
+            raise ValidationError(_("JustiFi: %s") % error_msg)
+
+        data = response.json()
+        return data.get('data', data)
+
+    def _justifi_cancel_terminal_action(self, terminal_id, checkout_id):
+        """
+        Cancel a terminal payment action.
+
+        :param terminal_id: The terminal ID
+        :param checkout_id: The checkout ID
+        :return: API response dict
+        """
+        self.ensure_one()
+
+        access_token = self._justifi_get_access_token()
+
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+            'Sub-Account': self.justifi_account_id,
+        }
+
+        url = f'{TERMINALS_URL}/cancel'
+        payload = {
+            'checkout_id': checkout_id,
+            'terminal_id': terminal_id,
+        }
+
+        _logger.info("JustiFi: Cancelling terminal %s for checkout %s", terminal_id, checkout_id)
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+        except requests.exceptions.RequestException as e:
+            _logger.warning("JustiFi: Network error cancelling terminal: %s", str(e))
+            return {}
+
+        if response.status_code >= 400:
+            _logger.warning("JustiFi: Cancel may have failed: %s", response.text)
+
+        try:
+            data = response.json()
+            return data.get('data', data)
+        except Exception:
+            return {}

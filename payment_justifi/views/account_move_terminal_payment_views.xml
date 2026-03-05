@@ -1,0 +1,90 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <record id="account_move_terminal_payment_form" model="ir.ui.view">
+        <field name="name">account.move.terminal.payment.form</field>
+        <field name="model">account.move.terminal.payment</field>
+        <field name="arch" type="xml">
+            <form string="Pay on Terminal">
+                <field name="state" invisible="1"/>
+                <field name="checkout_id" invisible="1"/>
+                <field name="selected_terminal_id" invisible="1"/>
+                <field name="terminal_action_id" invisible="1"/>
+                <field name="currency_id" invisible="1"/>
+
+                <!-- DRAFT: Select terminal -->
+                <group invisible="state != 'draft'">
+                    <group>
+                        <field name="invoice_id" readonly="1"/>
+                        <field name="amount" readonly="1"/>
+                        <field name="terminal_id"/>
+                    </group>
+                </group>
+
+                <!-- WAITING: Polling state -->
+                <div invisible="state != 'waiting'" class="text-center py-4">
+                    <div class="spinner-border text-primary mb-3" role="status">
+                        <span class="visually-hidden">Loading...</span>
+                    </div>
+                    <h3>Waiting for card tap...</h3>
+                    <p class="text-muted">
+                        Payment has been sent to the terminal.
+                        <br/>Please ask the customer to tap or insert their card.
+                    </p>
+                    <p class="text-muted small">
+                        Click "Check Status" to see if the payment has been completed.
+                    </p>
+                </div>
+
+                <!-- DONE: Success -->
+                <div invisible="state != 'done'" class="text-center py-4">
+                    <span class="fa fa-check-circle text-success fa-3x mb-3 d-block"/>
+                    <h3>Payment Successful!</h3>
+                    <p class="text-muted">
+                        The payment has been recorded and the invoice has been updated.
+                    </p>
+                    <group>
+                        <group>
+                            <field name="payment_id" readonly="1" string="Payment Reference"/>
+                        </group>
+                    </group>
+                </div>
+
+                <!-- ERROR: Show error -->
+                <div invisible="state != 'error'" class="text-center py-4">
+                    <span class="fa fa-exclamation-triangle text-danger fa-3x mb-3 d-block"/>
+                    <h3>Payment Failed</h3>
+                    <group>
+                        <group>
+                            <field name="error_message" readonly="1" widget="text"/>
+                        </group>
+                    </group>
+                </div>
+
+                <footer>
+                    <!-- Draft: Send button -->
+                    <button name="action_send_to_terminal" string="Send to Terminal"
+                            type="object" class="btn-primary"
+                            invisible="state != 'draft'"/>
+
+                    <!-- Waiting: Check Status and Cancel -->
+                    <button name="action_check_status" string="Check Status"
+                            type="object" class="btn-primary"
+                            invisible="state != 'waiting'"/>
+                    <button name="action_cancel_terminal" string="Cancel"
+                            type="object" class="btn-danger"
+                            invisible="state != 'waiting'"/>
+
+                    <!-- Error: Retry -->
+                    <button name="action_retry" string="Retry"
+                            type="object" class="btn-primary"
+                            invisible="state != 'error'"/>
+
+                    <!-- Close button (all states) -->
+                    <button string="Close" class="btn-secondary" special="cancel"/>
+                </footer>
+            </form>
+        </field>
+    </record>
+
+</odoo>

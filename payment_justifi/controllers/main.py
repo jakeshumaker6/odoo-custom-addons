@@ -354,6 +354,21 @@ class JustiFiController(http.Controller):
                 checkout_id, payment_id
             )
 
+    @http.route('/payment/justifi/terminal_status', type='json', auth='user', methods=['POST'])
+    def justifi_terminal_status(self, wizard_id, **kwargs):
+        """
+        Poll terminal payment status from the wizard.
+
+        Called by the wizard's "Check Status" button or future JS auto-polling.
+
+        :param wizard_id: The wizard record ID
+        :return: dict with payment status
+        """
+        wizard = request.env['account.move.terminal.payment'].browse(int(wizard_id))
+        if not wizard.exists() or not wizard.checkout_id:
+            return {'error': 'Invalid wizard or no checkout'}
+        return wizard._check_and_update_status()
+
     def _handle_payment_failure(self, provider, event_data):
         """
         Handle failed payment webhook.

@@ -7,6 +7,17 @@
         <field name="model">account.move</field>
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
+            <!-- Add "Pay on Terminal" button to invoice header -->
+            <xpath expr="//button[@name='action_register_payment']" position="after">
+                <button name="action_pay_on_terminal"
+                        string="Pay on Terminal"
+                        type="object"
+                        class="btn-secondary"
+                        icon="fa-credit-card"
+                        invisible="state != 'posted' or payment_state not in ('not_paid', 'partial')"
+                        groups="account.group_account_invoice"/>
+            </xpath>
+
             <!-- Add payment methods field in the invoice tab, near payment terms -->
             <xpath expr="//field[@name='invoice_payment_term_id']" position="after">
                 <field name="justifi_payment_methods"
