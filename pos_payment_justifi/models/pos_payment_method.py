@@ -293,9 +293,10 @@ class PosPaymentMethod(models.Model):
             'Sub-Account': provider.justifi_account_id,
         }
 
-        url = f'{TERMINALS_URL}/{terminal_id}/cancel'
+        url = f'{TERMINALS_URL}/cancel'
         payload = {
             'checkout_id': checkout_id,
+            'terminal_id': terminal_id,
         }
 
         _logger.info("JustiFi POS: Cancelling terminal %s action for checkout %s", terminal_id, checkout_id)

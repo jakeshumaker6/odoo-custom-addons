@@ -230,9 +230,10 @@ class PosJustiFiController(http.Controller):
             'Idempotency-Key': str(uuid.uuid4()),
         }
 
-        url = f'{TERMINALS_URL}/{terminal_id}/pay'
+        url = f'{TERMINALS_URL}/pay'
         payload = {
             'checkout_id': checkout_id,
+            'terminal_id': terminal_id,
         }
 
         _logger.info("JustiFi POS: Sending to terminal %s: %s", terminal_id, payload)
@@ -276,9 +277,10 @@ class PosJustiFiController(http.Controller):
             'Sub-Account': provider.justifi_account_id,
         }
 
-        url = f'{TERMINALS_URL}/{terminal_id}/cancel'
+        url = f'{TERMINALS_URL}/cancel'
         payload = {
             'checkout_id': checkout_id,
+            'terminal_id': terminal_id,
         }
 
         _logger.info("JustiFi POS: Cancelling terminal %s action for checkout %s", terminal_id, checkout_id)
