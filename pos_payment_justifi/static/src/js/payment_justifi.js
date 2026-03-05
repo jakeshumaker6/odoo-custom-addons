@@ -96,16 +96,23 @@ export class PaymentJustifi extends PaymentInterface {
      * @returns {Promise<boolean>} - True if payment successful
      */
     async _pollPaymentStatus(paymentLine, uuid) {
-        const MAX_POLL_TIME = 120000; // 2 minutes
+        const MAX_POLL_TIME = 95000; // 95 seconds (JustiFi terminal sessions timeout at 90s)
         const POLL_INTERVAL = 2000; // 2 seconds
         const startTime = Date.now();
 
         return new Promise((resolve) => {
             const pollStatus = async () => {
-                // Check if cancelled
+                // Check if cancelled or user clicked retry
                 if (paymentLine.payment_status === "retry" || paymentLine.payment_status === "cancelled") {
                     this._stopPolling();
                     resolve(false);
+                    return;
+                }
+
+                // Check if Force Done was clicked (status set to "done" externally)
+                if (paymentLine.payment_status === "done") {
+                    this._stopPolling();
+                    resolve(true);
                     return;
                 }
 
@@ -113,8 +120,8 @@ export class PaymentJustifi extends PaymentInterface {
                 if (Date.now() - startTime > MAX_POLL_TIME) {
                     console.warn("JustiFi: Payment polling timeout");
                     this._stopPolling();
-                    paymentLine.setPaymentStatus("timeout");
-                    this._showError(_t("Payment timeout. Please check the terminal."));
+                    paymentLine.setPaymentStatus("force_done");
+                    this._showError(_t("Terminal session timed out. If the payment was completed on the terminal, click 'Force Done'. Otherwise, retry."));
                     resolve(false);
                     return;
                 }
@@ -145,10 +152,10 @@ export class PaymentJustifi extends PaymentInterface {
                         resolve(true);
                         return;
                     } else if (status.is_failed) {
-                        // Payment failed
+                        // Payment failed or cancelled on terminal
                         this._stopPolling();
                         paymentLine.setPaymentStatus("retry");
-                        this._showError(_t("Payment was declined or cancelled."));
+                        this._showError(_t("Payment was declined or cancelled on the terminal."));
                         resolve(false);
                         return;
                     }
@@ -212,10 +219,17 @@ export class PaymentJustifi extends PaymentInterface {
             );
 
             console.log("JustiFi: Cancel result", result);
+
+            if (result.error) {
+                console.warn("JustiFi: Cancel may have failed:", result.error);
+            }
+
             return true;
 
         } catch (error) {
             console.error("JustiFi: Cancel error", error);
+            // Return true anyway — the payment line will be removed
+            // and the terminal session will expire on its own
             return true;
         }
     }

@@ -180,7 +180,7 @@ class PosPaymentMethod(models.Model):
                 'checkout_id': checkout_id,
                 'is_paid': status in ('completed', 'succeeded'),
                 'is_pending': status in ('pending', 'created'),
-                'is_failed': status in ('failed', 'canceled'),
+                'is_failed': status in ('failed', 'canceled', 'attempted'),
             }
 
         except Exception as e:
