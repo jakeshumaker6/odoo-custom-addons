@@ -16,27 +16,53 @@
         <!-- Hide Odoo's default payment method placeholder image -->
         <style>
             /* Hide the payment method image shown in payment form */
-            /* Target image inside the rounded overflow-hidden span */
             span.d-block.rounded.overflow-hidden img,
             span.overflow-hidden.rounded img.img-fluid,
             span.shadow-sm img.img-fluid,
-            /* Target by image source pattern */
             img[src*="image_payment_form"],
             img[src*="payment.method"],
-            /* Fallback selectors */
             .gap-1.flex-wrap.d-flex span img,
             div[for="o_payment_radio"] img.img-fluid {
                 display: none !important;
             }
-            /* Also hide the parent span to remove any spacing */
             span.d-block.rounded.overflow-hidden.shadow-sm,
             .gap-1.flex-wrap.d-flex > span {
                 display: none !important;
             }
+
+            /* Payment method tab styles */
+            .jf-payment-tabs {
+                display: flex;
+                gap: 10px;
+                margin-bottom: 15px;
+            }
+            .jf-payment-tab {
+                flex: 1;
+                padding: 10px 15px;
+                border: 2px solid #007bff;
+                border-radius: 8px;
+                text-align: center;
+                background-color: white;
+                cursor: pointer;
+                font-size: 14px;
+                font-weight: 500;
+                color: #333;
+                transition: background-color 0.2s, border-color 0.2s;
+            }
+            .jf-payment-tab.selected {
+                background-color: #007bff;
+                color: white;
+            }
+            .jf-payment-tab:not(.selected) {
+                border-color: #e0e0e0;
+            }
+            .jf-payment-tab:not(.selected):hover {
+                border-color: #007bff;
+            }
         </style>
 
         <!-- Load JustiFi web components -->
-        <script type="module" src="https://cdn.jsdelivr.net/npm/@justifi/webcomponents@6.7.3/dist/webcomponents/webcomponents.esm.js"/>
+        <script type="module" src="https://cdn.jsdelivr.net/npm/@justifi/webcomponents@6.12.0/dist/webcomponents/webcomponents.esm.js"/>
 
         <div id="justifi-payment-container"
              t-att-data-checkout-id="jf_values.get('checkout_id', '')"
@@ -44,9 +70,10 @@
              t-att-data-amount="amount"
              t-att-data-currency-id="currency.id"
              t-att-data-partner-id="partner_id"
-             t-att-data-provider-id="provider_sudo.id">
+             t-att-data-provider-id="provider_sudo.id"
+             t-att-data-payment-methods="jf_values.get('payment_methods', 'both')">
 
-            <!-- Loading state (shown briefly while component initializes) -->
+            <!-- Loading state -->
             <div id="justifi-loading" class="text-center py-4">
                 <div class="spinner-border text-primary" role="status">
                     <span class="visually-hidden">Loading...</span>
@@ -58,45 +85,50 @@
             <div id="justifi-error" class="alert alert-danger" style="display: none;" role="alert">
             </div>
 
-            <!-- Static JustiFi component structure - attributes set directly from template values -->
-            <!-- Payment methods: 'card' = card only, 'ach' = ACH only, 'both' = both enabled -->
-            <!-- Note: Boolean attributes should only be present when true, not set to "false" -->
-            <t t-if="jf_values.get('payment_methods') == 'card'">
-                <justifi-tokenize-payment-method
+            <!-- Modular Checkout Component -->
+            <div id="justifi-checkout-wrapper" style="display: none;">
+                <justifi-modular-checkout
                     t-att-auth-token="jf_values.get('auth_token', '')"
+                    t-att-checkout-id="jf_values.get('checkout_id', '')"
                     t-att-account-id="jf_values.get('account_id', '')"
-                    disable-bank-account="true"
-                    hide-submit-button="true"
-                    style="display: none;"
-                    id="justifi-tokenize">
-                </justifi-tokenize-payment-method>
-            </t>
-            <t t-elif="jf_values.get('payment_methods') == 'ach'">
-                <justifi-tokenize-payment-method
-                    t-att-auth-token="jf_values.get('auth_token', '')"
-                    t-att-account-id="jf_values.get('account_id', '')"
-                    disable-credit-card="true"
-                    hide-submit-button="true"
-                    style="display: none;"
-                    id="justifi-tokenize">
-                </justifi-tokenize-payment-method>
-            </t>
-            <t t-else="">
-                <!-- Both card and ACH enabled -->
-                <justifi-tokenize-payment-method
-                    t-att-auth-token="jf_values.get('auth_token', '')"
-                    t-att-account-id="jf_values.get('account_id', '')"
-                    hide-submit-button="true"
-                    style="display: none;"
-                    id="justifi-tokenize">
-                </justifi-tokenize-payment-method>
-            </t>
+                    id="justifi-modular-checkout">
 
-            <!-- Submit button -->
-            <div id="justifi-submit-container" style="display: none;" class="mt-3">
-                <button type="button" id="justifi-submit-btn" class="btn btn-primary w-100">
-                    Pay Now
-                </button>
+                    <!-- Payment Method Tabs (only shown when both card and bank are enabled) -->
+                    <t t-if="jf_values.get('payment_methods') == 'both'">
+                        <div class="jf-payment-tabs">
+                            <div class="jf-payment-tab selected" data-payment-method="card">Card</div>
+                            <div class="jf-payment-tab" data-payment-method="bank">Bank Account</div>
+                        </div>
+                    </t>
+
+                    <!-- Card Form -->
+                    <t t-if="jf_values.get('payment_methods') in ('card', 'both')">
+                        <div id="jf-card-form-container" data-form-type="card">
+                            <justifi-card-form/>
+                        </div>
+                    </t>
+
+                    <!-- Bank Account Form -->
+                    <t t-if="jf_values.get('payment_methods') in ('ach', 'both')">
+                        <div id="jf-bank-form-container" data-form-type="bank"
+                             t-att-style="'display: none;' if jf_values.get('payment_methods') == 'both' else ''">
+                            <justifi-bank-account-form/>
+                        </div>
+                    </t>
+
+                    <!-- Billing Form (ZIP code only) -->
+                    <div class="mt-2">
+                        <justifi-card-billing-form-simple/>
+                    </div>
+
+                </justifi-modular-checkout>
+
+                <!-- Submit button -->
+                <div class="mt-3">
+                    <button type="button" id="justifi-submit-btn" class="btn btn-primary w-100">
+                        Pay Now
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -118,60 +150,41 @@
                 const currencyId = container.dataset.currencyId || '';
                 const partnerId = container.dataset.partnerId || '';
                 const providerId = container.dataset.providerId || '';
+                const paymentMethods = container.dataset.paymentMethods || 'both';
 
                 const loadingEl = document.getElementById('justifi-loading');
                 const errorEl = document.getElementById('justifi-error');
-                const tokenizeEl = document.getElementById('justifi-tokenize');
-                const submitContainerEl = document.getElementById('justifi-submit-container');
+                const wrapperEl = document.getElementById('justifi-checkout-wrapper');
+                const checkoutEl = document.getElementById('justifi-modular-checkout');
                 const submitBtnEl = document.getElementById('justifi-submit-btn');
 
                 function showError(message) {
                     loadingEl.style.display = 'none';
-                    if (tokenizeEl) tokenizeEl.style.display = 'none';
-                    submitContainerEl.style.display = 'none';
+                    if (wrapperEl) wrapperEl.style.display = 'none';
                     errorEl.textContent = message;
                     errorEl.style.display = 'block';
                 }
 
-                function redirectToComplete(paymentToken) {
-                    console.log('=== JUSTIFI TOKEN EXTRACTION ===');
-                    console.log('Raw event.detail:', paymentToken);
+                function redirectToComplete(detail) {
+                    console.log('=== JUSTIFI CHECKOUT COMPLETE ===');
+                    console.log('Event detail:', detail);
 
-                    // JustiFi tokenize-payment-method returns: {response: {token: "pm_xxx", ...}}
-                    // Extract the token - check response wrapper first
-                    let tokenId = '';
-
-                    if (paymentToken) {
-                        // Check if wrapped in response object (this is the actual format)
-                        const data = paymentToken.response || paymentToken;
-                        console.log('Data to search:', data);
-
-                        // Get token from the data object
-                        if (data.token) {
-                            tokenId = data.token;
-                            console.log('Found token:', tokenId);
-                        } else if (data.id) {
-                            tokenId = data.id;
-                            console.log('Found id:', tokenId);
+                    // Extract payment_id if available
+                    let paymentId = '';
+                    if (detail) {
+                        if (detail.checkout &amp;&amp; detail.checkout.successful_payment_id) {
+                            paymentId = detail.checkout.successful_payment_id;
+                        } else if (detail.successful_payment_id) {
+                            paymentId = detail.successful_payment_id;
                         }
                     }
 
-                    // Validate it looks like a payment method token
-                    if (tokenId &amp;&amp; !tokenId.toString().startsWith('pm_')) {
-                        console.warn('Token does not start with pm_:', tokenId);
-                    }
-
-                    console.log('Final token ID:', tokenId);
-
-                    if (!tokenId) {
-                        console.error('NO TOKEN FOUND');
-                        alert('Payment tokenization failed. Please try again.');
-                        return;
-                    }
+                    console.log('Payment ID:', paymentId);
+                    console.log('Checkout ID:', checkoutId);
 
                     const fields = {
-                        'payment_token': tokenId,
                         'checkout_id': checkoutId,
+                        'payment_id': paymentId,
                         'amount': paymentAmount,
                         'currency_id': currencyId,
                         'partner_id': partnerId,
@@ -193,35 +206,59 @@
                     form.submit();
                 }
 
-                if (!checkoutId || !tokenizeEl) {
+                if (!checkoutId || !checkoutEl) {
                     showError('Payment configuration error. Please contact support.');
                     return;
                 }
 
-                // Listen for submit-event (successful tokenization)
-                tokenizeEl.addEventListener('submit-event', function(event) {
-                    console.log('JustiFi tokenize submit-event:', event.detail);
-                    // Tokenization successful, redirect with token
+                // Listen for submit-event (checkout completed by component)
+                checkoutEl.addEventListener('submit-event', function(event) {
+                    console.log('JustiFi modular checkout submit-event:', event.detail);
                     redirectToComplete(event.detail);
                 });
 
                 // Listen for error-event
-                tokenizeEl.addEventListener('error-event', function(event) {
-                    console.log('JustiFi tokenize error-event:', event.detail);
+                checkoutEl.addEventListener('error-event', function(event) {
+                    console.log('JustiFi modular checkout error-event:', event.detail);
                     const errorMsg = event.detail?.message || event.detail?.error || 'Payment failed. Please try again.';
                     showError(errorMsg);
                     submitBtnEl.disabled = false;
                     submitBtnEl.textContent = 'Pay Now';
                 });
 
+                // Payment method tab toggling (card/bank)
+                if (paymentMethods === 'both') {
+                    const tabs = container.querySelectorAll('.jf-payment-tab');
+                    const cardForm = document.getElementById('jf-card-form-container');
+                    const bankForm = document.getElementById('jf-bank-form-container');
+
+                    tabs.forEach(function(tab) {
+                        tab.addEventListener('click', function() {
+                            const method = tab.getAttribute('data-payment-method');
+
+                            // Update tab selection
+                            tabs.forEach(function(t) { t.classList.remove('selected'); });
+                            tab.classList.add('selected');
+
+                            // Toggle form visibility
+                            if (method === 'card') {
+                                if (cardForm) cardForm.style.display = 'block';
+                                if (bankForm) bankForm.style.display = 'none';
+                            } else if (method === 'bank') {
+                                if (cardForm) cardForm.style.display = 'none';
+                                if (bankForm) bankForm.style.display = 'block';
+                            }
+                        });
+                    });
+                }
+
                 // Wait for component to be defined, then show it
-                customElements.whenDefined('justifi-tokenize-payment-method').then(function() {
-                    console.log('justifi-tokenize-payment-method is available');
+                customElements.whenDefined('justifi-modular-checkout').then(function() {
+                    console.log('justifi-modular-checkout is available');
                     loadingEl.style.display = 'none';
-                    tokenizeEl.style.display = 'block';
-                    submitContainerEl.style.display = 'block';
+                    wrapperEl.style.display = 'block';
                 }).catch(function(err) {
-                    console.error('Failed to load justifi-tokenize-payment-method:', err);
+                    console.error('Failed to load justifi-modular-checkout:', err);
                     showError('Failed to load payment form. Please refresh the page.');
                 });
 
@@ -231,11 +268,11 @@
                     e.stopPropagation();
                     submitBtnEl.disabled = true;
                     submitBtnEl.textContent = 'Processing...';
-                    console.log('Calling tokenizePaymentMethod()');
-                    if (tokenizeEl &amp;&amp; typeof tokenizeEl.tokenizePaymentMethod === 'function') {
-                        tokenizeEl.tokenizePaymentMethod();
+                    console.log('Calling submitCheckout()');
+                    if (checkoutEl &amp;&amp; typeof checkoutEl.submitCheckout === 'function') {
+                        checkoutEl.submitCheckout();
                     } else {
-                        console.error('tokenizePaymentMethod not available');
+                        console.error('submitCheckout not available');
                         showError('Payment form not ready. Please refresh and try again.');
                     }
                 });
