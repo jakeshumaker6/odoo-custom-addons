@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Extend Product Template Form: Add WooCommerce tab -->
+    <record id="product_template_form_view_wc" model="ir.ui.view">
+        <field name="name">product.template.form.wc</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_only_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[last()]" position="after">
+                <page string="WooCommerce" name="woocommerce" invisible="not wc_id">
+                    <group>
+                        <group>
+                            <field name="wc_id" readonly="1"/>
+                            <field name="wc_backend_id" readonly="1"/>
+                            <field name="wc_product_type" readonly="1"/>
+                        </group>
+                        <group>
+                            <field name="wc_permalink" widget="url" readonly="1"/>
+                            <field name="wc_last_synced" readonly="1"/>
+                            <field name="wc_sync_needed"/>
+                        </group>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Extend Product Template Search: Add WooCommerce filters -->
+    <record id="product_template_search_view_wc" model="ir.ui.view">
+        <field name="name">product.template.search.wc</field>
+        <field name="model">product.template</field>
+        <field name="inherit_id" ref="product.product_template_search_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//search" position="inside">
+                <separator/>
+                <filter name="filter_wc_products" string="WooCommerce Products"
+                        domain="[('wc_id', '!=', 0)]"/>
+                <filter name="filter_wc_sync_needed" string="Needs WC Sync"
+                        domain="[('wc_sync_needed', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

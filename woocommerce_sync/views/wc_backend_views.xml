@@ -1,0 +1,104 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- WooCommerce Backend Form View -->
+    <record id="wc_backend_view_form" model="ir.ui.view">
+        <field name="name">wc.backend.form</field>
+        <field name="model">wc.backend</field>
+        <field name="arch" type="xml">
+            <form string="WooCommerce Backend">
+                <header>
+                    <button name="action_test_connection"
+                            string="Test Connection"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state == 'confirmed'"/>
+                    <button name="action_test_connection"
+                            string="Test Connection"
+                            type="object"
+                            invisible="state != 'confirmed'"/>
+                    <button name="action_sync_products"
+                            string="Sync Products"
+                            type="object"
+                            class="oe_highlight"
+                            invisible="state != 'confirmed'"/>
+                    <field name="state" widget="statusbar" statusbar_visible="draft,confirmed"/>
+                </header>
+                <sheet>
+                    <div class="oe_button_box" name="button_box">
+                        <button name="action_open_sync_logs"
+                                type="object"
+                                class="oe_stat_button"
+                                icon="fa-list">
+                            <field name="sync_log_count" widget="statinfo" string="Log Entries"/>
+                        </button>
+                    </div>
+                    <div class="oe_title">
+                        <h1>
+                            <field name="name" placeholder="e.g., My WooCommerce Store"/>
+                        </h1>
+                    </div>
+                    <group>
+                        <group string="Connection">
+                            <field name="url" placeholder="https://example.com" widget="url"/>
+                            <field name="consumer_key" password="True"/>
+                            <field name="consumer_secret" password="True"/>
+                        </group>
+                        <group string="Settings">
+                            <field name="sync_direction"/>
+                            <field name="default_product_type"/>
+                            <field name="sync_images"/>
+                            <field name="company_id" groups="base.group_multi_company"/>
+                        </group>
+                    </group>
+                    <group string="Auto Sync">
+                        <group>
+                            <field name="auto_sync_products"/>
+                            <field name="auto_sync_orders"/>
+                            <field name="auto_sync_inventory"/>
+                        </group>
+                        <group>
+                            <field name="last_product_sync"/>
+                            <field name="last_order_sync"/>
+                            <field name="last_inventory_sync"/>
+                        </group>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- WooCommerce Backend List View -->
+    <record id="wc_backend_view_list" model="ir.ui.view">
+        <field name="name">wc.backend.list</field>
+        <field name="model">wc.backend</field>
+        <field name="arch" type="xml">
+            <list string="WooCommerce Backends">
+                <field name="name"/>
+                <field name="url"/>
+                <field name="state" widget="badge"
+                       decoration-success="state == 'confirmed'"
+                       decoration-warning="state == 'draft'"
+                       decoration-danger="state == 'error'"/>
+                <field name="last_product_sync"/>
+                <field name="sync_direction"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_wc_backend" model="ir.actions.act_window">
+        <field name="name">WooCommerce Stores</field>
+        <field name="res_model">wc.backend</field>
+        <field name="view_mode">list,form</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                Connect your WooCommerce store
+            </p>
+            <p>
+                Add your WooCommerce store URL and API credentials to start syncing products.
+            </p>
+        </field>
+    </record>
+
+</odoo>

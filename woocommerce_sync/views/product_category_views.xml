@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Extend Product Category Form: Show WooCommerce ID -->
+    <record id="product_category_form_view_wc" model="ir.ui.view">
+        <field name="name">product.category.form.wc</field>
+        <field name="model">product.category</field>
+        <field name="inherit_id" ref="product.product_category_form_view"/>
+        <field name="arch" type="xml">
+            <xpath expr="//group" position="inside">
+                <field name="wc_id" readonly="1" invisible="not wc_id"/>
+                <field name="wc_backend_id" readonly="1" invisible="not wc_id"/>
+            </xpath>
+        </field>
+    </record>
+
+</odoo>

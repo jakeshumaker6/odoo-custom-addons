@@ -1,0 +1,85 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Sync Log List View -->
+    <record id="wc_sync_log_view_list" model="ir.ui.view">
+        <field name="name">wc.sync.log.list</field>
+        <field name="model">wc.sync.log</field>
+        <field name="arch" type="xml">
+            <list string="Sync Logs" create="false" edit="false">
+                <field name="create_date" string="Date"/>
+                <field name="backend_id"/>
+                <field name="sync_type"/>
+                <field name="direction"/>
+                <field name="status" widget="badge"
+                       decoration-success="status == 'success'"
+                       decoration-warning="status == 'warning'"
+                       decoration-danger="status == 'error'"/>
+                <field name="message"/>
+                <field name="record_count"/>
+            </list>
+        </field>
+    </record>
+
+    <!-- Sync Log Form View -->
+    <record id="wc_sync_log_view_form" model="ir.ui.view">
+        <field name="name">wc.sync.log.form</field>
+        <field name="model">wc.sync.log</field>
+        <field name="arch" type="xml">
+            <form string="Sync Log Entry" create="false" edit="false">
+                <sheet>
+                    <group>
+                        <group>
+                            <field name="create_date" string="Date"/>
+                            <field name="backend_id"/>
+                            <field name="sync_type"/>
+                            <field name="direction"/>
+                        </group>
+                        <group>
+                            <field name="status"/>
+                            <field name="record_count"/>
+                        </group>
+                    </group>
+                    <group string="Message">
+                        <field name="message" nolabel="1"/>
+                    </group>
+                    <group string="Details" invisible="not details">
+                        <field name="details" nolabel="1"/>
+                    </group>
+                </sheet>
+            </form>
+        </field>
+    </record>
+
+    <!-- Sync Log Search View -->
+    <record id="wc_sync_log_view_search" model="ir.ui.view">
+        <field name="name">wc.sync.log.search</field>
+        <field name="model">wc.sync.log</field>
+        <field name="arch" type="xml">
+            <search string="Sync Logs">
+                <field name="message"/>
+                <field name="backend_id"/>
+                <filter name="filter_errors" string="Errors" domain="[('status', '=', 'error')]"/>
+                <filter name="filter_success" string="Success" domain="[('status', '=', 'success')]"/>
+                <separator/>
+                <filter name="filter_products" string="Products" domain="[('sync_type', '=', 'product')]"/>
+                <filter name="filter_categories" string="Categories" domain="[('sync_type', '=', 'category')]"/>
+                <filter name="filter_orders" string="Orders" domain="[('sync_type', '=', 'order')]"/>
+                <group expand="0" string="Group By">
+                    <filter name="group_status" string="Status" context="{'group_by': 'status'}"/>
+                    <filter name="group_type" string="Type" context="{'group_by': 'sync_type'}"/>
+                    <filter name="group_backend" string="Store" context="{'group_by': 'backend_id'}"/>
+                </group>
+            </search>
+        </field>
+    </record>
+
+    <!-- Action -->
+    <record id="action_wc_sync_log" model="ir.actions.act_window">
+        <field name="name">Sync Logs</field>
+        <field name="res_model">wc.sync.log</field>
+        <field name="view_mode">list,form</field>
+        <field name="context">{'search_default_filter_errors': 0}</field>
+    </record>
+
+</odoo>

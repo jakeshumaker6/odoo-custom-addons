@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Top-level menu under Sales -->
+    <menuitem id="menu_woocommerce_root"
+              name="WooCommerce"
+              parent="sale.sale_menu_root"
+              sequence="40"/>
+
+    <!-- Configuration submenu -->
+    <menuitem id="menu_wc_backend"
+              name="Stores"
+              parent="menu_woocommerce_root"
+              action="action_wc_backend"
+              sequence="10"/>
+
+    <!-- Sync Log submenu -->
+    <menuitem id="menu_wc_sync_log"
+              name="Sync Logs"
+              parent="menu_woocommerce_root"
+              action="action_wc_sync_log"
+              sequence="20"/>
+
+</odoo>
