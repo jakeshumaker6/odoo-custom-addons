@@ -261,15 +261,13 @@ class WcBackend(models.Model):
             self._create_sync_log('connection', 'import', 'error', str(e))
             raise
 
+        # Reload the form so the statusbar reflects the new state
         return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _("Connection Successful"),
-                'message': _("Successfully connected to WooCommerce store."),
-                'type': 'success',
-                'sticky': False,
-            },
+            'type': 'ir.actions.act_window',
+            'res_model': 'wc.backend',
+            'res_id': self.id,
+            'view_mode': 'form',
+            'target': 'current',
         }
 
     def action_sync_products(self):
