@@ -1,5 +1,3 @@
 id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_wc_backend_user,wc.backend.user,model_wc_backend,woocommerce_sync.group_wc_user,1,0,0,0
-access_wc_backend_manager,wc.backend.manager,model_wc_backend,woocommerce_sync.group_wc_manager,1,1,1,1
-access_wc_sync_log_user,wc.sync.log.user,model_wc_sync_log,woocommerce_sync.group_wc_user,1,0,0,0
-access_wc_sync_log_manager,wc.sync.log.manager,model_wc_sync_log,woocommerce_sync.group_wc_manager,1,1,1,1
+access_wc_backend_internal,wc.backend.internal,model_wc_backend,base.group_user,1,1,1,1
+access_wc_sync_log_internal,wc.sync.log.internal,model_wc_sync_log,base.group_user,1,1,1,1
