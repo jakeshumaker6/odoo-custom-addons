@@ -65,11 +65,10 @@
                 <filter name="filter_products" string="Products" domain="[('sync_type', '=', 'product')]"/>
                 <filter name="filter_categories" string="Categories" domain="[('sync_type', '=', 'category')]"/>
                 <filter name="filter_orders" string="Orders" domain="[('sync_type', '=', 'order')]"/>
-                <group expand="0" string="Group By">
-                    <filter name="group_status" string="Status" context="{'group_by': 'status'}"/>
-                    <filter name="group_type" string="Type" context="{'group_by': 'sync_type'}"/>
-                    <filter name="group_backend" string="Store" context="{'group_by': 'backend_id'}"/>
-                </group>
+                <separator/>
+                <filter name="group_status" string="Group by Status" context="{'group_by': 'status'}"/>
+                <filter name="group_type" string="Group by Type" context="{'group_by': 'sync_type'}"/>
+                <filter name="group_backend" string="Group by Store" context="{'group_by': 'backend_id'}"/>
             </search>
         </field>
     </record>
