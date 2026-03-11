@@ -8,7 +8,6 @@
     <record id="group_wc_manager" model="res.groups">
         <field name="name">WooCommerce Manager</field>
         <field name="implied_ids" eval="[(4, ref('woocommerce_sync.group_wc_user'))]"/>
-        <field name="users" eval="[(4, ref('base.user_root')), (4, ref('base.user_admin'))]"/>
     </record>
 
 </odoo>
