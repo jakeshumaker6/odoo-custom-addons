@@ -271,37 +271,39 @@ class WcBackend(models.Model):
         }
 
     def action_sync_products(self):
-        """Import products from WooCommerce (categories, attributes, then products)."""
+        """Queue product sync to run immediately via cron (non-blocking)."""
+        self.ensure_one()
+        cron = self.env.ref('woocommerce_sync.ir_cron_wc_product_sync')
+        cron.sudo()._trigger()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Sync Queued"),
+                'message': _("Product sync is running in the background. Check Sync Logs for progress."),
+                'type': 'success',
+                'sticky': True,
+            },
+        }
+
+    def _run_product_sync(self):
+        """Execute the full product sync. Called by cron."""
         self.ensure_one()
         _logger.info("WooCommerce: Starting full product sync for %s", self.name)
 
         try:
-            # Step 1: Import categories
             cat_count = self._import_categories()
-
-            # Step 2: Import products (attributes are handled inline)
             prod_count = self._import_products()
-
             self.last_product_sync = fields.Datetime.now()
             self._create_sync_log(
                 'product', 'import', 'success',
                 f'Imported {cat_count} categories, {prod_count} products',
+                record_count=prod_count,
             )
         except Exception as e:
             _logger.error("WooCommerce: Product sync failed: %s", str(e))
             self._create_sync_log('product', 'import', 'error', str(e))
             raise
-
-        return {
-            'type': 'ir.actions.client',
-            'tag': 'display_notification',
-            'params': {
-                'title': _("Product Sync Complete"),
-                'message': _("Imported %d categories and %d products.") % (cat_count, prod_count),
-                'type': 'success',
-                'sticky': False,
-            },
-        }
 
     def action_open_sync_logs(self):
         """Open sync log list filtered by this backend."""
@@ -401,6 +403,9 @@ class WcBackend(models.Model):
             try:
                 self._import_single_product(wc_product)
                 count += 1
+                # Commit after each product so progress is saved even if the
+                # worker is restarted mid-sync.
+                self.env.cr.commit()
             except Exception as e:
                 _logger.error(
                     "WooCommerce: Failed to import product %s (wc_id=%s): %s",
@@ -751,7 +756,7 @@ class WcBackend(models.Model):
         for backend in backends:
             _logger.info("WooCommerce: Cron product sync for '%s'", backend.name)
             try:
-                backend.action_sync_products()
+                backend._run_product_sync()
             except Exception as e:
                 _logger.error("WooCommerce: Cron product sync failed for '%s': %s",
                               backend.name, str(e))
