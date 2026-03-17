@@ -8,6 +8,7 @@ WC_PRODUCT_CATEGORIES_ENDPOINT = f'{WC_API_BASE}/products/categories'
 WC_PRODUCT_ATTRIBUTES_ENDPOINT = f'{WC_API_BASE}/products/attributes'
 WC_PRODUCT_ATTRIBUTE_TERMS_ENDPOINT = f'{WC_API_BASE}/products/attributes/{{attribute_id}}/terms'
 WC_ORDERS_ENDPOINT = f'{WC_API_BASE}/orders'
+WC_CUSTOMERS_ENDPOINT = f'{WC_API_BASE}/customers'
 WC_SYSTEM_STATUS_ENDPOINT = f'{WC_API_BASE}/system_status'
 
 # API configuration
@@ -40,4 +41,23 @@ SYNC_TRIGGER_FIELDS = {
 VARIANT_SYNC_TRIGGER_FIELDS = {
     'default_code', 'lst_price', 'weight', 'volume', 'image_variant_1920',
     'active',
+}
+
+# Odoo sale.order state → WooCommerce order status
+ODOO_TO_WC_ORDER_STATUS = {
+    'draft': 'pending',
+    'sale': 'processing',
+    'done': 'completed',
+    'cancel': 'cancelled',
+}
+
+# WooCommerce order status → Odoo sale.order state
+WC_TO_ODOO_ORDER_STATUS = {
+    'pending': 'draft',
+    'processing': 'sale',
+    'on-hold': 'draft',
+    'completed': 'done',
+    'cancelled': 'cancel',
+    'refunded': 'cancel',
+    'failed': 'cancel',
 }

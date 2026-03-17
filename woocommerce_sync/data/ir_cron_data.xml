@@ -1,14 +1,47 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- Cron: Sync Products from WooCommerce -->
+    <!-- Cron: Import Products from WooCommerce -->
     <record id="ir_cron_wc_product_sync" model="ir.cron">
-        <field name="name">WooCommerce: Sync Products</field>
+        <field name="name">WooCommerce: Import Products</field>
         <field name="model_id" ref="model_wc_backend"/>
         <field name="state">code</field>
         <field name="code">model._cron_sync_products()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">hours</field>
+        <field name="active">True</field>
+    </record>
+
+    <!-- Cron: Export Products to WooCommerce -->
+    <record id="ir_cron_wc_product_export" model="ir.cron">
+        <field name="name">WooCommerce: Export Products</field>
+        <field name="model_id" ref="model_wc_backend"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_export_products()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+
+    <!-- Cron: Import Orders from WooCommerce -->
+    <record id="ir_cron_wc_order_sync" model="ir.cron">
+        <field name="name">WooCommerce: Import Orders</field>
+        <field name="model_id" ref="model_wc_backend"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_sync_orders()</field>
+        <field name="interval_number">30</field>
+        <field name="interval_type">minutes</field>
+        <field name="active">True</field>
+    </record>
+
+    <!-- Cron: Export Order Status to WooCommerce -->
+    <record id="ir_cron_wc_order_status_export" model="ir.cron">
+        <field name="name">WooCommerce: Export Order Status</field>
+        <field name="model_id" ref="model_wc_backend"/>
+        <field name="state">code</field>
+        <field name="code">model._cron_export_order_status()</field>
+        <field name="interval_number">15</field>
+        <field name="interval_type">minutes</field>
         <field name="active">True</field>
     </record>
 

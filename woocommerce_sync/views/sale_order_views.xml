@@ -1,0 +1,65 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!-- Add WooCommerce tab to Sale Order form -->
+    <record id="sale_order_view_form_wc" model="ir.ui.view">
+        <field name="name">sale.order.form.wc</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.view_order_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//page[@name='other_information']" position="after">
+                <page string="WooCommerce" name="woocommerce" invisible="not wc_id">
+                    <group>
+                        <group string="Order Info">
+                            <field name="wc_id" readonly="1"/>
+                            <field name="wc_backend_id" readonly="1"/>
+                            <field name="wc_order_status" readonly="1"/>
+                            <field name="wc_order_key" readonly="1"/>
+                        </group>
+                        <group string="Payment &amp; Sync">
+                            <field name="wc_payment_method" readonly="1"/>
+                            <field name="wc_date_created" readonly="1"/>
+                            <field name="wc_status_sync_needed"/>
+                        </group>
+                    </group>
+                    <group>
+                        <field name="wc_order_note" readonly="1"/>
+                    </group>
+                </page>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add WooCommerce filters to Sale Order search -->
+    <record id="sale_order_view_search_wc" model="ir.ui.view">
+        <field name="name">sale.order.search.wc</field>
+        <field name="model">sale.order</field>
+        <field name="inherit_id" ref="sale.sale_order_view_search_inherit_sale"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='my_sale_orders_filter']" position="after">
+                <separator/>
+                <filter string="WooCommerce Orders" name="wc_orders"
+                        domain="[('wc_id', '!=', 0)]"/>
+                <filter string="Needs WC Status Sync" name="wc_status_sync"
+                        domain="[('wc_status_sync_needed', '=', True)]"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Action for WC Orders menu -->
+    <record id="action_wc_sale_orders" model="ir.actions.act_window">
+        <field name="name">WooCommerce Orders</field>
+        <field name="res_model">sale.order</field>
+        <field name="view_mode">list,form</field>
+        <field name="domain">[('wc_id', '!=', 0)]</field>
+        <field name="help" type="html">
+            <p class="o_view_nocontent_smiling_face">
+                No WooCommerce orders yet
+            </p>
+            <p>
+                Orders from your WooCommerce store will appear here after syncing.
+            </p>
+        </field>
+    </record>
+
+</odoo>

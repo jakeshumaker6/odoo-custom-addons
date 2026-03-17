@@ -16,8 +16,10 @@ from ..const import (
     WC_PRODUCT_CATEGORIES_ENDPOINT,
     WC_PRODUCT_ATTRIBUTES_ENDPOINT,
     WC_PRODUCT_ATTRIBUTE_TERMS_ENDPOINT,
+    WC_ORDERS_ENDPOINT,
     DEFAULT_TIMEOUT,
     WC_BATCH_SIZE,
+    ODOO_TO_WC_ORDER_STATUS,
 )
 
 _logger = logging.getLogger(__name__)
@@ -284,6 +286,49 @@ class WcBackend(models.Model):
                 'type': 'success',
                 'sticky': True,
             },
+        }
+
+    def action_export_products(self):
+        """Queue product export to run immediately via cron (non-blocking)."""
+        self.ensure_one()
+        cron = self.env.ref('woocommerce_sync.ir_cron_wc_product_export')
+        cron.sudo()._trigger()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Export Queued"),
+                'message': _("Product export is running in the background. Check Sync Logs for progress."),
+                'type': 'success',
+                'sticky': True,
+            },
+        }
+
+    def action_sync_orders(self):
+        """Queue order sync to run immediately via cron (non-blocking)."""
+        self.ensure_one()
+        cron = self.env.ref('woocommerce_sync.ir_cron_wc_order_sync')
+        cron.sudo()._trigger()
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Sync Queued"),
+                'message': _("Order sync is running in the background. Check Sync Logs for progress."),
+                'type': 'success',
+                'sticky': True,
+            },
+        }
+
+    def action_open_wc_orders(self):
+        """Open sale orders imported from this WooCommerce backend."""
+        self.ensure_one()
+        return {
+            'type': 'ir.actions.act_window',
+            'name': _("WooCommerce Orders"),
+            'res_model': 'sale.order',
+            'view_mode': 'list,form',
+            'domain': [('wc_id', '!=', 0), ('wc_backend_id', '=', self.id)],
         }
 
     def _run_product_sync(self):
@@ -744,6 +789,583 @@ class WcBackend(models.Model):
         except requests.exceptions.RequestException as e:
             _logger.warning("WooCommerce: Variant image download error: %s", str(e))
 
+    # === PRODUCT EXPORT METHODS === #
+
+    def _run_product_export(self):
+        """Export products with wc_sync_needed=True to WooCommerce."""
+        self.ensure_one()
+        _logger.info("WooCommerce: Starting product export for %s", self.name)
+
+        products = self.env['product.template'].search([
+            ('wc_sync_needed', '=', True),
+            ('wc_backend_id', '=', self.id),
+        ])
+
+        if not products:
+            _logger.info("WooCommerce: No products need export")
+            return
+
+        count = 0
+        for product in products:
+            try:
+                self._export_single_product(product)
+                count += 1
+                self.env.cr.commit()
+            except Exception as e:
+                _logger.error(
+                    "WooCommerce: Failed to export product '%s' (id=%s): %s",
+                    product.name, product.id, str(e)
+                )
+                self._create_sync_log(
+                    'product', 'export', 'error',
+                    f"Failed to export '{product.name}': {e}",
+                )
+
+        if count:
+            self._create_sync_log(
+                'product', 'export', 'success',
+                f'Exported {count} products to WooCommerce',
+                record_count=count,
+            )
+        _logger.info("WooCommerce: Exported %d products", count)
+
+    def _export_single_product(self, product):
+        """Export a single product to WooCommerce (POST or PUT)."""
+        self.ensure_one()
+        payload = self._prepare_export_product_vals(product)
+
+        if product.wc_id:
+            # Update existing product
+            endpoint = f'{WC_PRODUCTS_ENDPOINT}/{product.wc_id}'
+            result = self._wc_api_put(endpoint, payload)
+            _logger.info("WooCommerce: Updated product '%s' (wc_id=%d)", product.name, product.wc_id)
+        else:
+            # Create new product
+            result = self._wc_api_post(WC_PRODUCTS_ENDPOINT, payload)
+            product.with_context(_wc_importing=True).write({
+                'wc_id': result['id'],
+                'wc_permalink': result.get('permalink', ''),
+            })
+            _logger.info("WooCommerce: Created product '%s' (wc_id=%d)", product.name, result['id'])
+
+        # Export variations for variable products
+        if product.wc_product_type == 'variable':
+            self._export_variations(product)
+
+        product.with_context(_wc_importing=True).write({
+            'wc_sync_needed': False,
+            'wc_last_synced': fields.Datetime.now(),
+        })
+
+    def _prepare_export_product_vals(self, product):
+        """Build the WooCommerce API payload from an Odoo product."""
+        self.ensure_one()
+        payload = {
+            'name': product.name or '',
+            'type': product.wc_product_type or 'simple',
+            'status': 'publish' if product.active else 'draft',
+            'description': product.description_sale or '',
+            'short_description': product.description_sale or '',
+        }
+
+        # Price (only for simple products; variable product pricing is per-variation)
+        if product.wc_product_type != 'variable' and product.list_price:
+            payload['regular_price'] = str(product.list_price)
+
+        # SKU (only for simple products)
+        if product.wc_product_type != 'variable' and product.default_code:
+            payload['sku'] = product.default_code
+
+        # Weight
+        if product.weight:
+            payload['weight'] = str(product.weight)
+
+        # Category
+        if product.categ_id and product.categ_id.wc_id:
+            payload['categories'] = [{'id': product.categ_id.wc_id}]
+        elif product.categ_id and not product.categ_id.wc_id:
+            # Category doesn't exist in WC yet — create it
+            self._ensure_category_exported(product.categ_id)
+            if product.categ_id.wc_id:
+                payload['categories'] = [{'id': product.categ_id.wc_id}]
+
+        # Attributes for variable products
+        if product.wc_product_type == 'variable' and product.attribute_line_ids:
+            attributes = []
+            for line in product.attribute_line_ids:
+                attr_data = {
+                    'name': line.attribute_id.name,
+                    'visible': True,
+                    'variation': True,
+                    'options': [v.name for v in line.value_ids],
+                }
+                if line.attribute_id.wc_id:
+                    attr_data['id'] = line.attribute_id.wc_id
+                attributes.append(attr_data)
+            payload['attributes'] = attributes
+
+        return payload
+
+    def _export_variations(self, product):
+        """Export all variants of a variable product to WooCommerce."""
+        self.ensure_one()
+        if not product.wc_id:
+            return
+
+        endpoint_base = WC_PRODUCT_VARIATIONS_ENDPOINT.format(product_id=product.wc_id)
+
+        for variant in product.product_variant_ids:
+            var_payload = {}
+
+            # Build attribute list for this variation
+            attrs = []
+            for ptav in variant.product_template_attribute_value_ids:
+                attr_entry = {
+                    'name': ptav.attribute_id.name,
+                    'option': ptav.product_attribute_value_id.name,
+                }
+                if ptav.attribute_id.wc_id:
+                    attr_entry['id'] = ptav.attribute_id.wc_id
+                attrs.append(attr_entry)
+            var_payload['attributes'] = attrs
+
+            # Price
+            if variant.wc_price:
+                var_payload['regular_price'] = str(variant.wc_price)
+            elif variant.lst_price:
+                var_payload['regular_price'] = str(variant.lst_price)
+
+            # SKU
+            if variant.default_code:
+                var_payload['sku'] = variant.default_code
+
+            # Weight
+            if variant.weight:
+                var_payload['weight'] = str(variant.weight)
+
+            # Status
+            var_payload['status'] = 'publish' if variant.active else 'private'
+
+            try:
+                if variant.wc_variant_id:
+                    endpoint = f'{endpoint_base}/{variant.wc_variant_id}'
+                    self._wc_api_put(endpoint, var_payload)
+                else:
+                    result = self._wc_api_post(endpoint_base, var_payload)
+                    variant.with_context(_wc_importing=True).wc_variant_id = result['id']
+
+                variant.with_context(_wc_importing=True).wc_variant_sync_needed = False
+            except Exception as e:
+                _logger.error(
+                    "WooCommerce: Failed to export variant '%s': %s",
+                    variant.display_name, str(e)
+                )
+
+    def _ensure_category_exported(self, category):
+        """Ensure an Odoo product category exists in WooCommerce. Create if not."""
+        self.ensure_one()
+        if category.wc_id:
+            return
+
+        payload = {'name': category.name}
+
+        # Handle parent category
+        if category.parent_id and category.parent_id.wc_id:
+            payload['parent'] = category.parent_id.wc_id
+        elif category.parent_id and not category.parent_id.wc_id:
+            self._ensure_category_exported(category.parent_id)
+            if category.parent_id.wc_id:
+                payload['parent'] = category.parent_id.wc_id
+
+        try:
+            result = self._wc_api_post(WC_PRODUCT_CATEGORIES_ENDPOINT, payload)
+            category.with_context(_wc_importing=True).write({
+                'wc_id': result['id'],
+                'wc_backend_id': self.id,
+            })
+            _logger.info("WooCommerce: Created category '%s' (wc_id=%d)", category.name, result['id'])
+        except Exception as e:
+            _logger.error("WooCommerce: Failed to create category '%s': %s", category.name, str(e))
+
+    # === ORDER IMPORT METHODS === #
+
+    def _run_order_sync(self):
+        """Import orders from WooCommerce into Odoo sale.order."""
+        self.ensure_one()
+        _logger.info("WooCommerce: Starting order sync for %s", self.name)
+
+        params = {'status': 'any', 'orderby': 'date', 'order': 'asc'}
+        if self.last_order_sync:
+            params['modified_after'] = self.last_order_sync.isoformat()
+
+        try:
+            wc_orders = self._wc_api_get(WC_ORDERS_ENDPOINT, params=params)
+        except Exception as e:
+            _logger.error("WooCommerce: Failed to fetch orders: %s", str(e))
+            self._create_sync_log('order', 'import', 'error', f'Failed to fetch orders: {e}')
+            raise
+
+        _logger.info("WooCommerce: Fetched %d orders", len(wc_orders))
+
+        count = 0
+        for wc_order in wc_orders:
+            try:
+                self._import_single_order(wc_order)
+                count += 1
+                self.env.cr.commit()
+            except Exception as e:
+                _logger.error(
+                    "WooCommerce: Failed to import order #%s (wc_id=%s): %s",
+                    wc_order.get('number'), wc_order.get('id'), str(e)
+                )
+                self._create_sync_log(
+                    'order', 'import', 'error',
+                    f"Failed to import order #{wc_order.get('number')}: {e}",
+                )
+
+        self.last_order_sync = fields.Datetime.now()
+        if count:
+            self._create_sync_log(
+                'order', 'import', 'success',
+                f'Imported {count} orders from WooCommerce',
+                record_count=count,
+            )
+        _logger.info("WooCommerce: Imported %d orders", count)
+
+    def _import_single_order(self, wc_order):
+        """Import a single WooCommerce order into Odoo."""
+        self.ensure_one()
+        SaleOrder = self.env['sale.order'].with_context(_wc_importing=True)
+        wc_id = wc_order['id']
+
+        # Check if already imported
+        existing = SaleOrder.search([
+            ('wc_id', '=', wc_id),
+            ('wc_backend_id', '=', self.id),
+        ], limit=1)
+
+        if existing:
+            # Update status only
+            existing.write({
+                'wc_order_status': wc_order.get('status', ''),
+            })
+            _logger.debug("WooCommerce: Order #%s already exists, updated status", wc_order.get('number'))
+            return
+
+        # Resolve or create partner
+        partner = self._get_or_create_partner(wc_order)
+
+        # Create sale order
+        order_vals = self._prepare_order_vals(wc_order, partner)
+        order = SaleOrder.create(order_vals)
+
+        # Create order lines
+        self._create_order_lines(order, wc_order)
+
+        # Auto-confirm if WC status indicates a paid/processing order
+        wc_status = wc_order.get('status', '')
+        if wc_status in ('processing', 'completed'):
+            order.with_context(_wc_importing=True).action_confirm()
+            if wc_status == 'completed':
+                order.with_context(_wc_importing=True).action_lock()
+
+        _logger.info("WooCommerce: Created order '%s' from WC order #%s", order.name, wc_order.get('number'))
+
+    def _prepare_order_vals(self, wc_order, partner):
+        """Prepare Odoo sale.order values from a WooCommerce order."""
+        self.ensure_one()
+
+        # Parse WC date
+        date_created = wc_order.get('date_created', '')
+        date_order = False
+        if date_created:
+            try:
+                date_order = fields.Datetime.to_datetime(date_created.replace('T', ' ')[:19])
+            except (ValueError, TypeError):
+                date_order = fields.Datetime.now()
+
+        vals = {
+            'partner_id': partner.id,
+            'wc_id': wc_order['id'],
+            'wc_backend_id': self.id,
+            'wc_order_status': wc_order.get('status', ''),
+            'wc_order_key': wc_order.get('order_key', ''),
+            'wc_payment_method': wc_order.get('payment_method_title', ''),
+            'wc_date_created': date_order,
+            'wc_order_note': wc_order.get('customer_note', ''),
+            'date_order': date_order or fields.Datetime.now(),
+            'company_id': self.company_id.id,
+            'client_order_ref': f"WC-{wc_order.get('number', wc_order['id'])}",
+        }
+
+        # Set shipping partner if shipping address differs
+        shipping = wc_order.get('shipping', {})
+        if shipping.get('first_name') or shipping.get('last_name'):
+            ship_partner = self._get_or_create_shipping_partner(partner, shipping)
+            if ship_partner:
+                vals['partner_shipping_id'] = ship_partner.id
+
+        return vals
+
+    def _get_or_create_partner(self, wc_order):
+        """Find or create a res.partner from WC order billing info."""
+        self.ensure_one()
+        billing = wc_order.get('billing', {})
+        email = (billing.get('email') or '').strip()
+
+        if email:
+            partner = self.env['res.partner'].search([('email', '=ilike', email)], limit=1)
+            if partner:
+                return partner
+
+        # Build partner name
+        first = (billing.get('first_name') or '').strip()
+        last = (billing.get('last_name') or '').strip()
+        name = f"{first} {last}".strip() or email or f"WC Customer #{wc_order['id']}"
+
+        vals = {
+            'name': name,
+            'email': email or False,
+            'phone': billing.get('phone') or False,
+            'street': billing.get('address_1') or False,
+            'street2': billing.get('address_2') or False,
+            'city': billing.get('city') or False,
+            'zip': billing.get('postcode') or False,
+            'customer_rank': 1,
+        }
+
+        # Country
+        country_code = (billing.get('country') or '').strip()
+        if country_code:
+            country = self.env['res.country'].search([('code', '=', country_code)], limit=1)
+            if country:
+                vals['country_id'] = country.id
+
+                # State
+                state_code = (billing.get('state') or '').strip()
+                if state_code:
+                    state = self.env['res.country.state'].search([
+                        ('code', '=', state_code),
+                        ('country_id', '=', country.id),
+                    ], limit=1)
+                    if state:
+                        vals['state_id'] = state.id
+
+        partner = self.env['res.partner'].create(vals)
+        _logger.info("WooCommerce: Created partner '%s' (%s)", name, email)
+        return partner
+
+    def _get_or_create_shipping_partner(self, parent_partner, shipping):
+        """Create a delivery address as a child contact if shipping differs."""
+        first = (shipping.get('first_name') or '').strip()
+        last = (shipping.get('last_name') or '').strip()
+        name = f"{first} {last}".strip()
+        if not name:
+            return False
+
+        vals = {
+            'parent_id': parent_partner.id,
+            'type': 'delivery',
+            'name': name,
+            'street': shipping.get('address_1') or False,
+            'street2': shipping.get('address_2') or False,
+            'city': shipping.get('city') or False,
+            'zip': shipping.get('postcode') or False,
+        }
+
+        country_code = (shipping.get('country') or '').strip()
+        if country_code:
+            country = self.env['res.country'].search([('code', '=', country_code)], limit=1)
+            if country:
+                vals['country_id'] = country.id
+                state_code = (shipping.get('state') or '').strip()
+                if state_code:
+                    state = self.env['res.country.state'].search([
+                        ('code', '=', state_code),
+                        ('country_id', '=', country.id),
+                    ], limit=1)
+                    if state:
+                        vals['state_id'] = state.id
+
+        return self.env['res.partner'].create(vals)
+
+    def _create_order_lines(self, order, wc_order):
+        """Create sale.order.line records from WC order line_items."""
+        self.ensure_one()
+        SaleOrderLine = self.env['sale.order.line'].with_context(_wc_importing=True)
+
+        for item in wc_order.get('line_items', []):
+            product = self._find_product_for_order_line(item)
+
+            # Calculate unit price and discount
+            quantity = float(item.get('quantity', 1))
+            subtotal = float(item.get('subtotal', 0))  # pre-discount, pre-tax
+            total = float(item.get('total', 0))  # post-discount, pre-tax
+
+            price_unit = subtotal / quantity if quantity else 0
+            discount = 0.0
+            if subtotal and subtotal != total:
+                discount = ((subtotal - total) / subtotal) * 100
+
+            line_vals = {
+                'order_id': order.id,
+                'product_id': product.id if product else False,
+                'name': item.get('name', 'WooCommerce Item'),
+                'product_uom_qty': quantity,
+                'price_unit': price_unit,
+                'discount': discount,
+                'tax_id': [(5, 0, 0)],  # Clear taxes — WC handles tax
+            }
+
+            if not product:
+                line_vals.pop('product_id')
+
+            SaleOrderLine.create(line_vals)
+
+        # Handle shipping lines
+        for ship_line in wc_order.get('shipping_lines', []):
+            ship_total = float(ship_line.get('total', 0))
+            if ship_total:
+                shipping_product = self._get_shipping_product()
+                SaleOrderLine.create({
+                    'order_id': order.id,
+                    'product_id': shipping_product.id,
+                    'name': ship_line.get('method_title', 'Shipping'),
+                    'product_uom_qty': 1,
+                    'price_unit': ship_total,
+                    'tax_id': [(5, 0, 0)],
+                })
+
+        # Handle fee lines
+        for fee_line in wc_order.get('fee_lines', []):
+            fee_total = float(fee_line.get('total', 0))
+            if fee_total:
+                SaleOrderLine.create({
+                    'order_id': order.id,
+                    'name': fee_line.get('name', 'Fee'),
+                    'product_uom_qty': 1,
+                    'price_unit': fee_total,
+                    'tax_id': [(5, 0, 0)],
+                })
+
+    def _find_product_for_order_line(self, wc_line_item):
+        """Find the Odoo product matching a WC order line item."""
+        Product = self.env['product.product']
+        variation_id = wc_line_item.get('variation_id', 0)
+        product_id = wc_line_item.get('product_id', 0)
+
+        # Try matching by variation ID first (for variable products)
+        if variation_id:
+            variant = Product.search([
+                ('wc_variant_id', '=', variation_id),
+                ('product_tmpl_id.wc_backend_id', '=', self.id),
+            ], limit=1)
+            if variant:
+                return variant
+
+        # Try matching by product template wc_id
+        if product_id:
+            tmpl = self.env['product.template'].search([
+                ('wc_id', '=', product_id),
+                ('wc_backend_id', '=', self.id),
+            ], limit=1)
+            if tmpl:
+                return tmpl.product_variant_ids[:1]
+
+        # Try matching by SKU
+        sku = (wc_line_item.get('sku') or '').strip()
+        if sku:
+            product = Product.search([('default_code', '=', sku)], limit=1)
+            if product:
+                return product
+
+        _logger.warning(
+            "WooCommerce: Could not find product for line item '%s' (product_id=%s, variation_id=%s)",
+            wc_line_item.get('name'), product_id, variation_id
+        )
+        return False
+
+    def _get_shipping_product(self):
+        """Get or create a service product for WC shipping charges."""
+        product = self.env['product.product'].search([
+            ('default_code', '=', 'WC-SHIPPING'),
+        ], limit=1)
+        if not product:
+            product = self.env['product.product'].create({
+                'name': 'WooCommerce Shipping',
+                'default_code': 'WC-SHIPPING',
+                'type': 'service',
+                'sale_ok': True,
+                'purchase_ok': False,
+                'list_price': 0,
+                'taxes_id': [(5, 0, 0)],
+            })
+        return product
+
+    # === ORDER STATUS EXPORT METHODS === #
+
+    def _run_order_status_export(self):
+        """Export order status changes from Odoo to WooCommerce."""
+        self.ensure_one()
+        _logger.info("WooCommerce: Starting order status export for %s", self.name)
+
+        orders = self.env['sale.order'].search([
+            ('wc_status_sync_needed', '=', True),
+            ('wc_backend_id', '=', self.id),
+            ('wc_id', '!=', 0),
+        ])
+
+        if not orders:
+            return
+
+        count = 0
+        for order in orders:
+            try:
+                self._export_order_status(order)
+                count += 1
+                self.env.cr.commit()
+            except Exception as e:
+                _logger.error(
+                    "WooCommerce: Failed to export status for order '%s': %s",
+                    order.name, str(e)
+                )
+                self._create_sync_log(
+                    'order', 'export', 'error',
+                    f"Failed to export status for '{order.name}': {e}",
+                )
+
+        if count:
+            self._create_sync_log(
+                'order', 'export', 'success',
+                f'Exported status for {count} orders',
+                record_count=count,
+            )
+
+    def _export_order_status(self, order):
+        """Push a single order's status to WooCommerce."""
+        self.ensure_one()
+        wc_status = ODOO_TO_WC_ORDER_STATUS.get(order.state)
+        if not wc_status:
+            _logger.warning("WooCommerce: No WC status mapping for Odoo state '%s'", order.state)
+            order.with_context(_wc_importing=True).wc_status_sync_needed = False
+            return
+
+        endpoint = f'{WC_ORDERS_ENDPOINT}/{order.wc_id}'
+        try:
+            self._wc_api_put(endpoint, {'status': wc_status})
+            order.with_context(_wc_importing=True).write({
+                'wc_status_sync_needed': False,
+                'wc_order_status': wc_status,
+            })
+            _logger.info("WooCommerce: Updated order #%s status to '%s'", order.wc_id, wc_status)
+        except ValidationError as e:
+            if '404' in str(e):
+                # Order deleted in WC — stop retrying
+                _logger.warning("WooCommerce: Order #%s not found in WC, skipping", order.wc_id)
+                order.with_context(_wc_importing=True).wc_status_sync_needed = False
+            else:
+                raise
+
     # === CRON METHODS === #
 
     @api.model
@@ -761,6 +1383,52 @@ class WcBackend(models.Model):
                 _logger.error("WooCommerce: Cron product sync failed for '%s': %s",
                               backend.name, str(e))
                 backend._create_sync_log('product', 'import', 'error', f'Cron sync failed: {e}')
+
+    @api.model
+    def _cron_export_products(self):
+        """Called by cron to export products for all active backends."""
+        backends = self.search([
+            ('state', '=', 'confirmed'),
+            ('sync_direction', 'in', ('odoo_to_wc', 'both')),
+        ])
+        for backend in backends:
+            _logger.info("WooCommerce: Cron product export for '%s'", backend.name)
+            try:
+                backend._run_product_export()
+            except Exception as e:
+                _logger.error("WooCommerce: Cron product export failed for '%s': %s",
+                              backend.name, str(e))
+                backend._create_sync_log('product', 'export', 'error', f'Cron export failed: {e}')
+
+    @api.model
+    def _cron_sync_orders(self):
+        """Called by cron to import orders for all active backends."""
+        backends = self.search([
+            ('state', '=', 'confirmed'),
+            ('auto_sync_orders', '=', True),
+        ])
+        for backend in backends:
+            _logger.info("WooCommerce: Cron order sync for '%s'", backend.name)
+            try:
+                backend._run_order_sync()
+            except Exception as e:
+                _logger.error("WooCommerce: Cron order sync failed for '%s': %s",
+                              backend.name, str(e))
+                backend._create_sync_log('order', 'import', 'error', f'Cron sync failed: {e}')
+
+    @api.model
+    def _cron_export_order_status(self):
+        """Called by cron to export order status changes."""
+        backends = self.search([
+            ('state', '=', 'confirmed'),
+        ])
+        for backend in backends:
+            try:
+                backend._run_order_status_export()
+            except Exception as e:
+                _logger.error("WooCommerce: Cron order status export failed for '%s': %s",
+                              backend.name, str(e))
+                backend._create_sync_log('order', 'export', 'error', f'Cron status export failed: {e}')
 
     # === LOG HELPER === #
 

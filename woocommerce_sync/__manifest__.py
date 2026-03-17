@@ -2,7 +2,7 @@
 
 {
     'name': 'WooCommerce Sync',
-    'version': '19.0.1.0.0',
+    'version': '19.0.2.0.0',
     'category': 'Sales/Sales',
     'summary': 'Bidirectional product, order, and inventory sync with WooCommerce.',
     'description': """
@@ -38,6 +38,7 @@ Configuration:
         'views/wc_sync_log_views.xml',
         'views/product_template_views.xml',
         'views/product_category_views.xml',
+        'views/sale_order_views.xml',
         'views/menus.xml',
     ],
     'application': True,
