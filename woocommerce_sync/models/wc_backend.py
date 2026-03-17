@@ -1214,7 +1214,7 @@ class WcBackend(models.Model):
                 'product_uom_qty': quantity,
                 'price_unit': price_unit,
                 'discount': discount,
-                'tax_id': [(5, 0, 0)],  # Clear taxes — WC handles tax
+                'tax_ids': [(5, 0, 0)],  # Clear taxes — WC handles tax
             }
 
             if not product:
@@ -1233,7 +1233,7 @@ class WcBackend(models.Model):
                     'name': ship_line.get('method_title', 'Shipping'),
                     'product_uom_qty': 1,
                     'price_unit': ship_total,
-                    'tax_id': [(5, 0, 0)],
+                    'tax_ids': [(5, 0, 0)],
                 })
 
         # Handle fee lines
@@ -1245,7 +1245,7 @@ class WcBackend(models.Model):
                     'name': fee_line.get('name', 'Fee'),
                     'product_uom_qty': 1,
                     'price_unit': fee_total,
-                    'tax_id': [(5, 0, 0)],
+                    'tax_ids': [(5, 0, 0)],
                 })
 
     def _find_product_for_order_line(self, wc_line_item):
