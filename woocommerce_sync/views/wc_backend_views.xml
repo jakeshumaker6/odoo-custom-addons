@@ -30,6 +30,11 @@
                             string="Import Orders"
                             type="object"
                             invisible="state != 'confirmed'"/>
+                    <button name="action_reset_sync_timestamps"
+                            string="Reset Timestamps"
+                            type="object"
+                            invisible="state != 'confirmed'"
+                            confirm="This will force a full re-import on the next sync. Continue?"/>
                     <field name="state" widget="statusbar" statusbar_visible="draft,confirmed"/>
                 </header>
                 <sheet>

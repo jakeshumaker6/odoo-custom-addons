@@ -273,18 +273,17 @@ class WcBackend(models.Model):
         }
 
     def action_sync_products(self):
-        """Queue product sync to run immediately via cron (non-blocking)."""
+        """Run product sync directly (blocking) so the user gets immediate feedback."""
         self.ensure_one()
-        cron = self.env.ref('woocommerce_sync.ir_cron_wc_product_sync')
-        cron.sudo()._trigger()
+        self._run_product_sync()
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _("Sync Queued"),
-                'message': _("Product sync is running in the background. Check Sync Logs for progress."),
+                'title': _("Product Sync Complete"),
+                'message': _("Check Sync Logs for details."),
                 'type': 'success',
-                'sticky': True,
+                'sticky': False,
             },
         }
 
@@ -305,18 +304,36 @@ class WcBackend(models.Model):
         }
 
     def action_sync_orders(self):
-        """Queue order sync to run immediately via cron (non-blocking)."""
+        """Run order sync directly (blocking) so the user gets immediate feedback."""
         self.ensure_one()
-        cron = self.env.ref('woocommerce_sync.ir_cron_wc_order_sync')
-        cron.sudo()._trigger()
+        self._run_order_sync()
         return {
             'type': 'ir.actions.client',
             'tag': 'display_notification',
             'params': {
-                'title': _("Sync Queued"),
-                'message': _("Order sync is running in the background. Check Sync Logs for progress."),
+                'title': _("Order Sync Complete"),
+                'message': _("Check Sync Logs for details."),
                 'type': 'success',
-                'sticky': True,
+                'sticky': False,
+            },
+        }
+
+    def action_reset_sync_timestamps(self):
+        """Clear sync timestamps to force a full re-sync on next run."""
+        self.ensure_one()
+        self.write({
+            'last_product_sync': False,
+            'last_order_sync': False,
+            'last_inventory_sync': False,
+        })
+        return {
+            'type': 'ir.actions.client',
+            'tag': 'display_notification',
+            'params': {
+                'title': _("Timestamps Reset"),
+                'message': _("Next sync will perform a full import."),
+                'type': 'info',
+                'sticky': False,
             },
         }
 
