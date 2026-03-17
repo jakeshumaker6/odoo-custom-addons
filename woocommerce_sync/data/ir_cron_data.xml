@@ -9,7 +9,7 @@
         <field name="code">model._cron_sync_products()</field>
         <field name="interval_number">1</field>
         <field name="interval_type">hours</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
 
     <!-- Cron: Export Products to WooCommerce -->
@@ -20,7 +20,7 @@
         <field name="code">model._cron_export_products()</field>
         <field name="interval_number">15</field>
         <field name="interval_type">minutes</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
 
     <!-- Cron: Import Orders from WooCommerce -->
@@ -31,7 +31,7 @@
         <field name="code">model._cron_sync_orders()</field>
         <field name="interval_number">30</field>
         <field name="interval_type">minutes</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
 
     <!-- Cron: Export Order Status to WooCommerce -->
@@ -42,7 +42,7 @@
         <field name="code">model._cron_export_order_status()</field>
         <field name="interval_number">15</field>
         <field name="interval_type">minutes</field>
-        <field name="active">True</field>
+        <field name="active">False</field>
     </record>
 
 </odoo>
