@@ -17,13 +17,21 @@ patch(PaymentScreen.prototype, {
         // Call original to handle date picker
         await super.toggleShippingDatePicker(...arguments);
 
-        // If a shipping date was just set (not cleared), fetch rates
-        if (!hadDate && order.getShippingDate() && this.pos.config.shipengine_carrier_id) {
+        const hasDateNow = order.getShippingDate();
+
+        // Ship Later date changed — recalculate AvaTax with correct address
+        // (warehouse for Take Now, customer address for Ship Later)
+        if (hadDate !== hasDateNow && this.pos.config.module_pos_avatax) {
+            await this.pos.getAvataxTaxesRpc();
+        }
+
+        // If a shipping date was just set (not cleared), fetch shipping rates
+        if (!hadDate && hasDateNow && this.pos.config.shipengine_carrier_id) {
             await this._fetchAndShowShippingRates();
         }
 
         // If shipping date was cleared, remove the shipping line
-        if (hadDate && !order.getShippingDate()) {
+        if (hadDate && !hasDateNow) {
             this._removeShippingLine();
         }
     },
