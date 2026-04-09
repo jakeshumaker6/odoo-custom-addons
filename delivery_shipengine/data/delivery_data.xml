@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Shipping product used as the delivery line item -->
+    <record id="product_product_shipengine" model="product.product">
+        <field name="name">ShipEngine Shipping</field>
+        <field name="type">service</field>
+        <field name="list_price">0.0</field>
+        <field name="sale_ok">False</field>
+        <field name="purchase_ok">False</field>
+        <field name="categ_id" ref="delivery.product_category_deliveries"/>
+        <field name="invoice_policy">order</field>
+    </record>
+
+    <!-- Default ShipEngine carrier record -->
+    <record id="delivery_carrier_shipengine" model="delivery.carrier">
+        <field name="name">ShipEngine</field>
+        <field name="delivery_type">shipengine</field>
+        <field name="product_id" ref="product_product_shipengine"/>
+        <field name="integration_level">rate_and_ship</field>
+        <field name="shipengine_default_weight_oz">16.0</field>
+        <field name="shipengine_default_package_code">package</field>
+        <field name="shipengine_label_format">pdf</field>
+    </record>
+</odoo>

@@ -12,6 +12,7 @@ from ..const import (
     CHECKOUTS_URL,
     WEB_COMPONENT_TOKEN_URL,
     TERMINALS_URL,
+    PAYMENTS_URL,
     SUPPORTED_CURRENCIES,
     PAYMENT_METHOD_CODES_CARD,
     PAYMENT_METHOD_CODES_ACH,
@@ -638,4 +639,48 @@ class PaymentProvider(models.Model):
             data = response.json()
             return data.get('data', data)
         except Exception:
+            return {}
+
+    def _justifi_get_payment_details(self, payment_id):
+        """Retrieve payment details from JustiFi, including cardholder name.
+
+        GET /v1/payments/{payment_id}
+
+        The cardholder name is at: data.payment_method.card.name
+        - Card insert: real name in LAST/FIRST format (e.g., "SHUMAKER/JAKE")
+        - Card tap: generic name (e.g., "CARDHOLDER/VISA")
+
+        :param payment_id: JustiFi payment ID (py_xxxxx)
+        :returns: dict with payment details
+        """
+        self.ensure_one()
+        access_token = self._justifi_get_access_token()
+
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+            'Sub-Account': self.justifi_account_id,
+        }
+
+        _logger.info("JustiFi: Getting payment details for %s", payment_id)
+
+        try:
+            response = requests.get(
+                f'{PAYMENTS_URL}/{payment_id}',
+                headers=headers,
+                timeout=15,
+            )
+
+            if response.status_code >= 400:
+                _logger.warning(
+                    "JustiFi: Failed to get payment details: %s %s",
+                    response.status_code, response.text[:200],
+                )
+                return {}
+
+            data = response.json()
+            return data.get('data', {})
+
+        except Exception as exc:
+            _logger.warning("JustiFi: Error getting payment details: %s", exc)
             return {}

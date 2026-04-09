@@ -6,6 +6,7 @@ OAUTH_TOKEN_URL = f'{API_BASE_URL}/oauth/token'
 CHECKOUTS_URL = f'{API_BASE_URL}/v1/checkouts'
 WEB_COMPONENT_TOKEN_URL = f'{API_BASE_URL}/v1/web_component_tokens'
 TERMINALS_URL = f'{API_BASE_URL}/v1/terminals'
+PAYMENTS_URL = f'{API_BASE_URL}/v1/payments'
 
 # JustiFi Web Components CDN
 WEBCOMPONENTS_CDN_URL = 'https://cdn.jsdelivr.net/npm/@justifi/webcomponents@latest/dist/webcomponents/webcomponents.esm.js'

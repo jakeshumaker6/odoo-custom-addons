@@ -1,0 +1,22 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Deposit product category -->
+    <record id="pos_category_deposits" model="pos.category">
+        <field name="name">Deposits</field>
+        <field name="sequence">99</field>
+    </record>
+
+    <!-- $500 Customer Deposit product -->
+    <record id="product_deposit_500" model="product.product">
+        <field name="name">Customer Deposit - $500</field>
+        <field name="type">service</field>
+        <field name="list_price">500.00</field>
+        <field name="default_code">DEPOSIT500</field>
+        <field name="available_in_pos">True</field>
+        <field name="sale_ok">True</field>
+        <field name="purchase_ok">False</field>
+        <field name="taxes_id" eval="[(5, 0, 0)]"/>
+        <field name="pos_categ_ids" eval="[(4, ref('pos_category_deposits'))]"/>
+        <field name="property_account_income_id" ref="account_customer_deposits"/>
+    </record>
+</odoo>

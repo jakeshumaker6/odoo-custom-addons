@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Add deposit fields to POS order form view -->
+    <record id="view_pos_order_form_deposit" model="ir.ui.view">
+        <field name="name">pos.order.form.deposit</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_pos_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='partner_id']" position="after">
+                <field name="is_deposit" invisible="not is_deposit"/>
+                <field name="deposit_state" invisible="not is_deposit"/>
+                <field name="deposit_reference" invisible="not is_deposit"/>
+                <field name="deposit_redeemed_order_id" invisible="not is_deposit"/>
+                <field name="deposit_origin_order_id" invisible="not deposit_origin_order_id"/>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add deposit filter to POS order list -->
+    <record id="view_pos_order_search_deposit" model="ir.ui.view">
+        <field name="name">pos.order.search.deposit</field>
+        <field name="model">pos.order</field>
+        <field name="inherit_id" ref="point_of_sale.view_pos_order_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[1]" position="before">
+                <filter name="deposits" string="Deposits"
+                        domain="[('is_deposit', '=', True)]"/>
+                <filter name="active_deposits" string="Active Deposits"
+                        domain="[('is_deposit', '=', True), ('deposit_state', '=', 'active')]"/>
+                <separator/>
+            </xpath>
+        </field>
+    </record>
+</odoo>

@@ -1,0 +1,56 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <t t-name="pos_deposit.DepositRedeemPopup">
+        <Dialog title="props.title" size="'md'">
+            <div class="deposit-redeem-popup p-3">
+                <t t-if="props.deposits.length === 0">
+                    <div class="alert alert-info">
+                        No active deposits found for this customer.
+                    </div>
+                </t>
+
+                <div class="d-flex flex-column gap-2">
+                    <t t-foreach="props.deposits" t-as="deposit" t-key="deposit.id">
+                        <button
+                            class="btn btn-lg d-flex justify-content-between align-items-center w-100 p-3"
+                            t-att-class="{
+                                'btn-primary': state.selectedDeposit and state.selectedDeposit.id === deposit.id,
+                                'btn-outline-secondary': !state.selectedDeposit or state.selectedDeposit.id !== deposit.id
+                            }"
+                            t-on-click="() => this.selectDeposit(deposit)">
+                            <div class="text-start">
+                                <div class="fw-bold">
+                                    <t t-esc="deposit.deposit_reference"/>
+                                </div>
+                                <div class="text-muted small">
+                                    Order: <t t-esc="deposit.name"/>
+                                </div>
+                                <div class="text-muted small">
+                                    Date: <t t-esc="deposit.date_order"/>
+                                </div>
+                            </div>
+                            <div class="fw-bold fs-4 text-success">
+                                $<t t-esc="deposit.amount.toFixed(2)"/>
+                            </div>
+                        </button>
+                    </t>
+                </div>
+
+                <div class="alert alert-warning mt-3 small">
+                    <i class="fa fa-info-circle me-1"/>
+                    Deposit will be fully applied ($500). Any remainder is forfeited per policy.
+                </div>
+
+                <div class="d-grid mt-3">
+                    <button class="btn btn-primary btn-lg"
+                            t-att-disabled="!state.selectedDeposit"
+                            t-on-click="confirm">
+                        Apply Deposit
+                    </button>
+                </div>
+            </div>
+        </Dialog>
+    </t>
+
+</templates>

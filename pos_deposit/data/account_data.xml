@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!-- Customer Deposits liability account -->
+    <record id="account_customer_deposits" model="account.account">
+        <field name="name">Customer Deposits</field>
+        <field name="account_type">liability_current</field>
+        <field name="reconcile">True</field>
+    </record>
+</odoo>

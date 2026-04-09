@@ -1,0 +1,20 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<templates id="template" xml:space="preserve">
+
+    <!-- Add Deposit buttons to ControlButtons (shown in "more" menu) -->
+    <t t-inherit="point_of_sale.ControlButtons" t-inherit-mode="extension">
+        <xpath expr="//button[contains(@t-on-click, 'clickRefund')]" position="after">
+            <button t-att-class="buttonClass"
+                    t-on-click="() => this.clickCollectDeposit()">
+                <i class="fa fa-money me-1" role="img" aria-label="Collect Deposit" title="Collect $500 Deposit"/>
+                Collect $500 Deposit
+            </button>
+            <button t-att-class="buttonClass"
+                    t-on-click="() => this.clickRedeemDeposit()">
+                <i class="fa fa-exchange me-1" role="img" aria-label="Redeem Deposit" title="Redeem Deposit"/>
+                Redeem Deposit
+            </button>
+        </xpath>
+    </t>
+
+</templates>
