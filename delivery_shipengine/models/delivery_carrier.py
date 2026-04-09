@@ -228,7 +228,7 @@ class DeliveryCarrier(models.Model):
         Returns: list of tier dicts + raw rates for debugging.
         """
         self.ensure_one()
-        warehouse = self.warehouse_id or self.env['stock.warehouse'].search(
+        warehouse = self.env['stock.warehouse'].search(
             [('company_id', '=', self.company_id.id or self.env.company.id)], limit=1,
         )
         if not warehouse or not warehouse.partner_id:
