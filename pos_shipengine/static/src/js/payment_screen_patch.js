@@ -12,27 +12,30 @@ patch(PaymentScreen.prototype, {
      */
     async toggleShippingDatePicker() {
         const order = this.currentOrder;
-        const hadDate = order.getShippingDate();
+        const hadDate = !!order.shipping_date;
 
         // Call original to handle date picker
         await super.toggleShippingDatePicker(...arguments);
 
-        const hasDateNow = order.getShippingDate();
+        const hasDateNow = !!order.shipping_date;
 
-        // Ship Later date changed — recalculate AvaTax with correct address
-        // (warehouse for Take Now, customer address for Ship Later)
-        if (hadDate !== hasDateNow && this.pos.config.module_pos_avatax) {
-            await this.pos.getAvataxTaxesRpc();
-        }
+        if (hadDate !== hasDateNow) {
+            // Ship Later toggled — recalculate AvaTax with correct address
+            // Set: tax switches to customer's shipping address
+            // Cleared: tax switches back to warehouse (POS location)
+            if (this.pos.config.module_pos_avatax) {
+                await this.pos.getAvataxTaxesRpc();
+            }
 
-        // If a shipping date was just set (not cleared), fetch shipping rates
-        if (!hadDate && hasDateNow && this.pos.config.shipengine_carrier_id) {
-            await this._fetchAndShowShippingRates();
-        }
+            // If date was just set, also fetch shipping rates
+            if (hasDateNow && this.pos.config.shipengine_carrier_id) {
+                await this._fetchAndShowShippingRates();
+            }
 
-        // If shipping date was cleared, remove the shipping line
-        if (hadDate && !hasDateNow) {
-            this._removeShippingLine();
+            // If date was cleared, remove the shipping line
+            if (!hasDateNow) {
+                this._removeShippingLine();
+            }
         }
     },
 
