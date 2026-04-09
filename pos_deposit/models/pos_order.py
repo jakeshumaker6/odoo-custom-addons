@@ -28,11 +28,12 @@ class PosOrder(models.Model):
         'Deposit Reference', compute='_compute_deposit_reference', store=True,
     )
 
-    @api.depends('is_deposit', 'id')
+    @api.depends('is_deposit', 'name')
     def _compute_deposit_reference(self):
         for order in self:
-            if order.is_deposit and order.id:
-                order.deposit_reference = f'DEP-{order.id:05d}'
+            if order.is_deposit and order.name:
+                # Use the POS order name (e.g., "Order 00001-001-0001") to derive reference
+                order.deposit_reference = f'DEP-{order.name}'
             else:
                 order.deposit_reference = False
 
