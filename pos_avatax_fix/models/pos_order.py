@@ -37,7 +37,8 @@ class PosOrder(models.Model):
     def _get_avatax_address_from_partner(self, partner):
         """Override: Fall back to warehouse address if partner address is incomplete."""
         if partner and partner.zip and partner.state_id and partner.country_id:
-            return super()._get_avatax_address_from_partner(partner)
+            # Valid address — use it
+            return self._get_avatax_address(partner)
 
         # Partner has incomplete address — fall back to warehouse
         warehouse_partner = self.config_id.warehouse_id.partner_id if self.config_id.warehouse_id else None
@@ -47,15 +48,13 @@ class PosOrder(models.Model):
                 partner.name if partner else 'None',
                 warehouse_partner.name,
             )
-            return super()._get_avatax_address_from_partner(warehouse_partner)
+            return self._get_avatax_address(warehouse_partner)
 
-        # Last resort: raise the original error
-        if not partner:
-            raise ValidationError(_(
-                'Avatax requires your current location or a customer to be set '
-                'on the order with a proper zip, state and country.'
-            ))
-        return super()._get_avatax_address_from_partner(partner)
+        # Last resort: raise error
+        raise ValidationError(_(
+            'Avatax requires a valid address. Please set a zip, state, and country '
+            'on the customer or configure a warehouse on the POS.'
+        ))
 
     def _get_line_data_for_external_taxes(self):
         """Override to return base_line dicts compatible with the Odoo 19 tax engine.
