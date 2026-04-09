@@ -2,7 +2,7 @@
 <templates id="template" xml:space="preserve">
 
     <!-- Add deposit header and footer to receipt -->
-    <t t-inherit="point_of_sale.OrderReceipt" t-inherit-mode="extension">
+    <t t-name="pos_deposit.OrderReceipt" t-inherit="point_of_sale.OrderReceipt" t-inherit-mode="extension">
         <!-- Add CUSTOMER DEPOSIT header before the receipt content -->
         <xpath expr="//div[hasclass('pos-receipt')]" position="inside">
             <t t-if="order.is_deposit">
