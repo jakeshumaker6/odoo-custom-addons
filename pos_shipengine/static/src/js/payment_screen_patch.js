@@ -41,11 +41,11 @@ patch(PaymentScreen.prototype, {
         }
 
         // Build order line data for weight calculation
-        const orderLineData = order.get_orderlines()
+        const orderLineData = (order.lines || [])
             .filter(line => !line.is_shipping_charge)
             .map(line => ({
                 product_id: line.product_id.id,
-                qty: line.get_quantity(),
+                qty: line.getQuantity(),
             }));
 
         this.notification.add(_t("Fetching shipping rates..."), { type: "info" });
@@ -59,7 +59,6 @@ patch(PaymentScreen.prototype, {
 
             if (result.error) {
                 this.notification.add(result.error, { type: "danger" });
-                // Fall back to custom amount popup
                 this._showShippingRatePopup([]);
                 return;
             }
@@ -73,7 +72,6 @@ patch(PaymentScreen.prototype, {
                 _t("Could not fetch shipping rates. You can enter a custom amount."),
                 { type: "warning" }
             );
-            // Fall back to custom amount popup
             this._showShippingRatePopup([]);
         }
     },
@@ -92,9 +90,8 @@ patch(PaymentScreen.prototype, {
 
     /**
      * Apply the selected shipping rate to the order.
-     * Adds/updates a shipping line item on the order.
      */
-    _applyShippingRate(rate) {
+    async _applyShippingRate(rate) {
         const order = this.currentOrder;
 
         // Remove existing shipping line if any
@@ -107,23 +104,25 @@ patch(PaymentScreen.prototype, {
         order.shipping_service_code = rate.service_code || '';
         order.shipping_rate_id = rate.rate_id || '';
 
-        // Find the shipping product from the POS loaded products
-        // We look for a product named "ShipEngine Shipping" or use a fallback
+        // Find the shipping product
         const shippingProduct = this._getShippingProduct();
 
         if (shippingProduct && rate.amount > 0) {
-            // Add shipping as an order line
-            const line = order.addProduct(shippingProduct, {
-                price: rate.amount,
-                quantity: 1,
-                merge: false,
-                extras: { is_shipping_charge: true },
-            });
-            if (line) {
-                line.is_shipping_charge = true;
-                line.set_unit_price(rate.amount);
-                // Prevent cashier from modifying the shipping line manually
-                line.price_type = "automatic";
+            // Add shipping as an order line via Odoo 19 API
+            await this.pos.addLineToCurrentOrder(
+                {
+                    product_tmpl_id: shippingProduct.product_tmpl_id,
+                    price_unit: rate.amount,
+                    qty: 1,
+                },
+                { merge: false }
+            );
+
+            // Mark the last added line as shipping charge
+            const lastLine = order.lines.at(-1);
+            if (lastLine) {
+                lastLine.is_shipping_charge = true;
+                lastLine.price_type = "automatic";
             }
         }
 
@@ -135,7 +134,7 @@ patch(PaymentScreen.prototype, {
         }[rate.tier] || rate.tier;
 
         this.notification.add(
-            _t("Shipping: %s — %s", tierLabel, `$${rate.amount.toFixed(2)}`),
+            _t("Shipping: %s — $%s", tierLabel, rate.amount.toFixed(2)),
             { type: "success" }
         );
     },
@@ -145,7 +144,7 @@ patch(PaymentScreen.prototype, {
      */
     _removeShippingLine() {
         const order = this.currentOrder;
-        const shippingLines = order.get_orderlines().filter(
+        const shippingLines = (order.lines || []).filter(
             line => line.is_shipping_charge
         );
         for (const line of shippingLines) {
@@ -162,19 +161,10 @@ patch(PaymentScreen.prototype, {
      * Get the shipping product from POS loaded products.
      */
     _getShippingProduct() {
-        // Try to find the ShipEngine delivery product
         const products = this.pos.models["product.product"].getAll();
-        let shippingProduct = products.find(
-            p => p.default_code === 'SHIPENGINE_SHIPPING' || p.display_name === 'ShipEngine Shipping'
-        );
-
-        // Fallback: find any delivery/shipping product
-        if (!shippingProduct) {
-            shippingProduct = products.find(
-                p => p.display_name && p.display_name.toLowerCase().includes('shipping')
-            );
-        }
-
-        return shippingProduct || null;
+        return products.find(
+            p => p.default_code === 'SHIPENGINE_SHIPPING' ||
+                 (p.display_name && p.display_name.includes('ShipEngine Shipping'))
+        ) || null;
     },
 });

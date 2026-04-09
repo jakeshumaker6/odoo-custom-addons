@@ -17,8 +17,8 @@ patch(ControlButtons.prototype, {
 
         // Require customer selection
         if (!order.getPartner()) {
-            const confirmed = await this.pos.selectPartner();
-            if (!confirmed || !order.getPartner()) {
+            await this.pos.selectPartner();
+            if (!order.getPartner()) {
                 this.pos.notification.add(
                     _t("A customer must be selected to collect a deposit."),
                     { type: "warning" },
@@ -38,16 +38,20 @@ patch(ControlButtons.prototype, {
         }
 
         // Clear any existing lines and add deposit
-        const lines = order.get_orderlines();
-        for (const line of [...lines]) {
+        const lines = [...(order.lines || [])];
+        for (const line of lines) {
             order.removeOrderline(line);
         }
 
-        order.addProduct(depositProduct, {
-            price: DEPOSIT_AMOUNT,
-            quantity: 1,
-            merge: false,
-        });
+        // Add deposit product via Odoo 19 API
+        await this.pos.addLineToCurrentOrder(
+            {
+                product_tmpl_id: depositProduct.product_tmpl_id,
+                price_unit: DEPOSIT_AMOUNT,
+                qty: 1,
+            },
+            { merge: false }
+        );
 
         // Mark order as a deposit
         order.is_deposit = true;
@@ -69,8 +73,8 @@ patch(ControlButtons.prototype, {
 
         // Require customer selection
         if (!order.getPartner()) {
-            const confirmed = await this.pos.selectPartner();
-            if (!confirmed || !order.getPartner()) {
+            await this.pos.selectPartner();
+            if (!order.getPartner()) {
                 this.pos.notification.add(
                     _t("A customer must be selected to redeem a deposit."),
                     { type: "warning" },
@@ -108,7 +112,7 @@ patch(ControlButtons.prototype, {
     /**
      * Apply a deposit redemption as a negative line on the current order.
      */
-    _applyDepositRedemption(deposit) {
+    async _applyDepositRedemption(deposit) {
         const order = this.pos.getOrder();
         const depositProduct = this._getDepositProduct();
 
@@ -121,11 +125,14 @@ patch(ControlButtons.prototype, {
         }
 
         // Add negative deposit line (full $500 consumed — forfeit remainder)
-        order.addProduct(depositProduct, {
-            price: DEPOSIT_AMOUNT,
-            quantity: -1,
-            merge: false,
-        });
+        await this.pos.addLineToCurrentOrder(
+            {
+                product_tmpl_id: depositProduct.product_tmpl_id,
+                price_unit: DEPOSIT_AMOUNT,
+                qty: -1,
+            },
+            { merge: false }
+        );
 
         // Store the deposit origin for backend linking
         order.deposit_origin_order_id = deposit.id;
