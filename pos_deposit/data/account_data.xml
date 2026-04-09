@@ -3,6 +3,7 @@
     <!-- Customer Deposits liability account -->
     <record id="account_customer_deposits" model="account.account">
         <field name="name">Customer Deposits</field>
+        <field name="code">215000</field>
         <field name="account_type">liability_current</field>
         <field name="reconcile">True</field>
     </record>
