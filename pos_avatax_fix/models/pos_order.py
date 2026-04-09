@@ -10,13 +10,31 @@ class PosOrder(models.Model):
         compute='_compute_partner_shipping_id',
     )
 
-    @api.depends('partner_id')
+    @api.depends('partner_id', 'shipping_date')
     def _compute_partner_shipping_id(self):
         for order in self:
-            if order.partner_id:
+            if order.shipping_date and order.partner_id:
+                # Ship Later: use customer's delivery address for tax calculation
+                order.partner_shipping_id = order.partner_id.address_get(['delivery'])['delivery']
+            elif order.config_id.warehouse_id and order.config_id.warehouse_id.partner_id:
+                # Take Now: use POS warehouse address for tax calculation
+                order.partner_shipping_id = order.config_id.warehouse_id.partner_id.id
+            elif order.partner_id:
+                # Fallback: use customer address
                 order.partner_shipping_id = order.partner_id.address_get(['delivery'])['delivery']
             else:
                 order.partner_shipping_id = False
+
+    def _get_avatax_ship_to_partner(self):
+        """Override to use POS location for Take Now, customer address for Ship Later."""
+        if self.shipping_date and self.partner_id:
+            # Ship Later: tax based on customer's shipping destination
+            return self.partner_id
+        elif self.config_id.warehouse_id and self.config_id.warehouse_id.partner_id:
+            # Take Now: tax based on POS/warehouse location
+            return self.config_id.warehouse_id.partner_id
+        # Fallback to partner if set
+        return self.partner_id or self.config_id.warehouse_id.partner_id
 
     def _get_line_data_for_external_taxes(self):
         """Override to return base_line dicts compatible with the Odoo 19 tax engine.
