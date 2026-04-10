@@ -19,7 +19,7 @@ patch(ControlButtons.prototype, {
         if (!order.getPartner()) {
             await this.pos.selectPartner();
             if (!order.getPartner()) {
-                this.pos.notification.add(
+                this.notification.add(
                     _t("A customer must be selected to collect a deposit."),
                     { type: "warning" },
                 );
@@ -30,7 +30,7 @@ patch(ControlButtons.prototype, {
         // Find the deposit product
         const depositProduct = this._getDepositProduct();
         if (!depositProduct) {
-            this.pos.notification.add(
+            this.notification.add(
                 _t("Deposit product (DEPOSIT500) not found. Please contact your administrator."),
                 { type: "danger" },
             );
@@ -56,13 +56,13 @@ patch(ControlButtons.prototype, {
         // Mark order as a deposit
         order.is_deposit = true;
 
-        this.pos.notification.add(
+        this.notification.add(
             _t("$500 deposit added for %s", order.getPartner().name),
             { type: "success" },
         );
 
         // Navigate to payment screen
-        this.pos.showScreen("PaymentScreen");
+        this.pos.navigate("PaymentScreen");
     },
 
     /**
@@ -75,7 +75,7 @@ patch(ControlButtons.prototype, {
         if (!order.getPartner()) {
             await this.pos.selectPartner();
             if (!order.getPartner()) {
-                this.pos.notification.add(
+                this.notification.add(
                     _t("A customer must be selected to redeem a deposit."),
                     { type: "warning" },
                 );
@@ -93,7 +93,7 @@ patch(ControlButtons.prototype, {
         );
 
         if (!deposits || deposits.length === 0) {
-            this.pos.notification.add(
+            this.notification.add(
                 _t("No active deposits found for %s.", partner.name),
                 { type: "warning" },
             );
@@ -117,7 +117,7 @@ patch(ControlButtons.prototype, {
         const depositProduct = this._getDepositProduct();
 
         if (!depositProduct) {
-            this.pos.notification.add(
+            this.notification.add(
                 _t("Deposit product not found."),
                 { type: "danger" },
             );
@@ -137,7 +137,7 @@ patch(ControlButtons.prototype, {
         // Store the deposit origin for backend linking
         order.deposit_origin_order_id = deposit.id;
 
-        this.pos.notification.add(
+        this.notification.add(
             _t("Deposit %s ($500) applied to order.", deposit.deposit_reference),
             { type: "success" },
         );
@@ -147,9 +147,34 @@ patch(ControlButtons.prototype, {
      * Find the DEPOSIT500 product in POS loaded products.
      */
     _getDepositProduct() {
-        const products = this.pos.models["product.product"].getAll();
-        return products.find(
-            p => p.default_code === DEPOSIT_PRODUCT_CODE
-        ) || null;
+        // Try by default_code on product.product
+        let product = this.pos.models["product.product"].getBy(
+            "default_code", DEPOSIT_PRODUCT_CODE
+        );
+
+        // Fallback: search all products
+        if (!product) {
+            const all = this.pos.models["product.product"].getAll();
+            product = all.find(p => p.default_code === DEPOSIT_PRODUCT_CODE);
+        }
+
+        // Fallback: search by name on product.template
+        if (!product) {
+            const templates = this.pos.models["product.template"].getAll();
+            const tmpl = templates.find(t => t.default_code === DEPOSIT_PRODUCT_CODE);
+            if (tmpl && tmpl.product_variant_ids && tmpl.product_variant_ids.length > 0) {
+                product = tmpl.product_variant_ids[0];
+            }
+        }
+
+        if (!product) {
+            console.error("DEPOSIT500 not found. Available products:",
+                this.pos.models["product.product"].getAll().map(
+                    p => ({id: p.id, code: p.default_code, name: p.display_name})
+                ).slice(0, 10)
+            );
+        }
+
+        return product || null;
     },
 });
