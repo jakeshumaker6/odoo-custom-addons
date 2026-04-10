@@ -11,6 +11,7 @@ const DEPOSIT_PRODUCT_CODE = "DEPOSIT500";
 patch(ControlButtons.prototype, {
     /**
      * Collect a $500 deposit from the customer.
+     * Adds the deposit product to the current order.
      */
     async clickCollectDeposit() {
         const order = this.pos.getOrder();
@@ -37,13 +38,7 @@ patch(ControlButtons.prototype, {
             return;
         }
 
-        // Clear any existing lines and add deposit
-        const lines = [...(order.lines || [])];
-        for (const line of lines) {
-            order.removeOrderline(line);
-        }
-
-        // Add deposit product via Odoo 19 API
+        // Add deposit product to the current order
         await this.pos.addLineToCurrentOrder(
             {
                 product_tmpl_id: depositProduct.product_tmpl_id,
@@ -150,12 +145,6 @@ patch(ControlButtons.prototype, {
         // Fallback: search by name
         if (!product) {
             product = all.find(p => p.display_name && p.display_name.includes("Deposit"));
-        }
-
-        if (!product) {
-            console.error("DEPOSIT500 not found. Loaded products:",
-                all.map(p => ({id: p.id, code: p.default_code, name: p.display_name})).slice(0, 10)
-            );
         }
 
         return product || null;
