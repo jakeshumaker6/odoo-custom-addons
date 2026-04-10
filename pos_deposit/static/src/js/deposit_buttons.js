@@ -57,12 +57,9 @@ patch(ControlButtons.prototype, {
         order.is_deposit = true;
 
         this.notification.add(
-            _t("$500 deposit added for %s", order.getPartner().name),
+            _t("$500 deposit added for %s. Click Payment to proceed.", order.getPartner().name),
             { type: "success" },
         );
-
-        // Navigate to payment screen
-        this.pos.navigate("PaymentScreen");
     },
 
     /**
