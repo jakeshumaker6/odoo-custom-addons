@@ -147,31 +147,17 @@ patch(ControlButtons.prototype, {
      * Find the DEPOSIT500 product in POS loaded products.
      */
     _getDepositProduct() {
-        // Try by default_code on product.product
-        let product = this.pos.models["product.product"].getBy(
-            "default_code", DEPOSIT_PRODUCT_CODE
-        );
+        const all = this.pos.models["product.product"].getAll();
+        let product = all.find(p => p.default_code === DEPOSIT_PRODUCT_CODE);
 
-        // Fallback: search all products
+        // Fallback: search by name
         if (!product) {
-            const all = this.pos.models["product.product"].getAll();
-            product = all.find(p => p.default_code === DEPOSIT_PRODUCT_CODE);
-        }
-
-        // Fallback: search by name on product.template
-        if (!product) {
-            const templates = this.pos.models["product.template"].getAll();
-            const tmpl = templates.find(t => t.default_code === DEPOSIT_PRODUCT_CODE);
-            if (tmpl && tmpl.product_variant_ids && tmpl.product_variant_ids.length > 0) {
-                product = tmpl.product_variant_ids[0];
-            }
+            product = all.find(p => p.display_name && p.display_name.includes("Deposit"));
         }
 
         if (!product) {
-            console.error("DEPOSIT500 not found. Available products:",
-                this.pos.models["product.product"].getAll().map(
-                    p => ({id: p.id, code: p.default_code, name: p.display_name})
-                ).slice(0, 10)
+            console.error("DEPOSIT500 not found. Loaded products:",
+                all.map(p => ({id: p.id, code: p.default_code, name: p.display_name})).slice(0, 10)
             );
         }
 
