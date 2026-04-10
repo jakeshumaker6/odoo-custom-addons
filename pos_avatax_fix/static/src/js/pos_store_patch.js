@@ -18,13 +18,14 @@ patch(PosStore.prototype, {
 
         try {
             const order = this.getOrder();
-            if (this.env.services.ui.isBlocked) {
+            if (!order || this.env.services.ui.isBlocked) {
                 return;
             }
 
-            // REMOVED: the original `!order.partner_id` guard.
-            // We always calculate tax — the backend uses the warehouse
-            // address when no customer is set or address is incomplete.
+            // Skip if order has no lines yet (nothing to tax)
+            if (!order.lines || order.lines.length === 0) {
+                return;
+            }
 
             this.env.services.ui.block({ message: _t("Updating Avatax taxes...") });
 
