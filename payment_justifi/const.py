@@ -8,6 +8,10 @@ WEB_COMPONENT_TOKEN_URL = f'{API_BASE_URL}/v1/web_component_tokens'
 TERMINALS_URL = f'{API_BASE_URL}/v1/terminals'
 PAYMENTS_URL = f'{API_BASE_URL}/v1/payments'
 
+# Refund reasons accepted by JustiFi CreateRefund endpoint
+REFUND_REASONS = ('customer_request', 'fraud', 'duplicate')
+DEFAULT_REFUND_REASON = 'customer_request'
+
 # JustiFi Web Components CDN
 WEBCOMPONENTS_CDN_URL = 'https://cdn.jsdelivr.net/npm/@justifi/webcomponents@latest/dist/webcomponents/webcomponents.esm.js'
 
