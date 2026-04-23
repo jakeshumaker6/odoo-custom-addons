@@ -19,12 +19,14 @@ def _post_init_hook(env):
     # We use bank_sepa code but name it to reflect both options
     justifi_method = env['payment.method'].search([('code', '=', 'bank_sepa')], limit=1)
     if justifi_method:
-        # Ensure JustiFi is linked and name is correct
+        # Ensure JustiFi is linked, name is correct, and refunds are enabled
         updates = {}
         if provider not in justifi_method.provider_ids:
             updates['provider_ids'] = [(4, provider.id)]
         if 'JustiFi' not in justifi_method.name:
             updates['name'] = 'JustiFi (Card / ACH)'
+        if justifi_method.support_refund != 'partial':
+            updates['support_refund'] = 'partial'
         if updates:
             justifi_method.write(updates)
     else:
@@ -35,6 +37,7 @@ def _post_init_hook(env):
             'sequence': 20,
             'active': True,
             'provider_ids': [(4, provider.id)],
+            'support_refund': 'partial',
         })
 
     # Remove JustiFi from Card payment method if present (avoid duplicate options)
