@@ -38,7 +38,8 @@
 
                 <!-- DONE: Success -->
                 <div invisible="state != 'done'" class="text-center py-4">
-                    <span class="fa fa-check-circle text-success fa-3x mb-3 d-block"/>
+                    <span class="fa fa-check-circle text-success fa-3x mb-3 d-block"
+                          title="Payment Successful" role="img"/>
                     <h3>Payment Successful!</h3>
                     <p class="text-muted">
                         The payment has been recorded and the invoice has been updated.
@@ -52,7 +53,8 @@
 
                 <!-- ERROR: Show error -->
                 <div invisible="state != 'error'" class="text-center py-4">
-                    <span class="fa fa-exclamation-triangle text-danger fa-3x mb-3 d-block"/>
+                    <span class="fa fa-exclamation-triangle text-danger fa-3x mb-3 d-block"
+                          title="Payment Failed" role="img"/>
                     <h3>Payment Failed</h3>
                     <group>
                         <group>
