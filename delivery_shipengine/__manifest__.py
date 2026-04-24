@@ -1,6 +1,6 @@
 {
     'name': 'ShipEngine Shipping',
-    'version': '19.0.1.5.0',
+    'version': '19.0.1.6.0',
     'category': 'Inventory/Delivery',
     'summary': 'Ship via ShipEngine — multi-carrier rate shopping, label printing, and tracking',
     'description': """
