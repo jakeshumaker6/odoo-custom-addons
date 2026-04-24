@@ -233,6 +233,38 @@ class TestShipEngineCarrier(TransactionCase):
         pkgs = self.carrier._shipengine_compute_packages(order_lines=[section_line])
         self.assertEqual(pkgs[0]["weight"]["value"], 1.0)
 
+    def test_compute_packages_honors_wizard_order_weight_context(self):
+        """When the Add Shipping wizard types a weight, that value wins."""
+        line = types.SimpleNamespace(
+            product_id=types.SimpleNamespace(weight=1.0, type="consu"),
+            product_qty=1, product_uom_qty=1,
+            is_delivery=False, display_type=False,
+        )
+        # With kg UoM: 5 kg override → 5 * 35.274 = 176.4 oz
+        pkgs = self.carrier.with_context(order_weight=5.0)._shipengine_compute_packages(
+            order_lines=[line],
+        )
+        to_oz = self.carrier._shipengine_weight_unit_to_oz_factor()
+        self.assertAlmostEqual(pkgs[0]["weight"]["value"], 5.0 * to_oz, places=1)
+
+    def test_compute_packages_zero_context_weight_falls_through(self):
+        """order_weight=0 should not override — fall through to line-based calc."""
+        line = types.SimpleNamespace(
+            product_id=types.SimpleNamespace(weight=2.0, type="consu"),
+            product_qty=3, product_uom_qty=3,
+            is_delivery=False, display_type=False,
+        )
+        to_oz = self.carrier._shipengine_weight_unit_to_oz_factor()
+        pkgs = self.carrier.with_context(order_weight=0.0)._shipengine_compute_packages(
+            order_lines=[line],
+        )
+        self.assertAlmostEqual(pkgs[0]["weight"]["value"], 2.0 * to_oz * 3, places=1)
+
+    def test_weight_unit_factor_returns_known_value(self):
+        """Factor must be 16 (lb) or 35.274 (kg)."""
+        factor = self.carrier._shipengine_weight_unit_to_oz_factor()
+        self.assertIn(factor, (16.0, 35.274))
+
     def test_compute_packages_falls_back_to_default_weight(self):
         line = types.SimpleNamespace(
             product_id=types.SimpleNamespace(weight=0.0, type="consu"),
