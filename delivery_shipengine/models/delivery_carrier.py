@@ -121,24 +121,60 @@ class DeliveryCarrier(models.Model):
 
     # ─── Package / Weight ──────────────────────────────────────
 
+    @staticmethod
+    def _shipengine_line_contributes_weight(line):
+        """Return True if a sale/picking line should contribute to package weight.
+
+        Excludes the delivery line itself (would double-count its own fallback),
+        section/note display-only lines, and non-consumable products (services,
+        digital — no physical weight).
+        """
+        if getattr(line, 'is_delivery', False):
+            return False
+        if getattr(line, 'display_type', False):
+            return False
+        product = getattr(line, 'product_id', None)
+        if not product:
+            return False
+        if getattr(product, 'type', 'consu') != 'consu':
+            return False
+        return True
+
     def _shipengine_compute_packages(self, order_lines=None, picking=None):
         """Compute package list from order lines or picking.
         Returns a list of ShipEngine package dicts.
+
+        Matches Odoo's standard ``sale.order._get_estimated_weight`` semantics:
+        only consumable, non-display, non-delivery lines contribute weight. Uses
+        ``product_qty`` when available so UoM conversions (e.g. case→unit) are
+        respected; falls back to ``product_uom_qty`` or ``qty`` otherwise.
         """
         self.ensure_one()
         total_weight_oz = 0.0
 
         if order_lines:
             for line in order_lines:
+                if not self._shipengine_line_contributes_weight(line):
+                    continue
                 product = line.product_id
-                qty = line.product_uom_qty if hasattr(line, 'product_uom_qty') else line.qty
+                # Odoo's `product_qty` is UoM-converted to product's base unit;
+                # `product_uom_qty` is the raw sale-line quantity.
+                qty = (
+                    getattr(line, 'product_qty', None)
+                    or getattr(line, 'product_uom_qty', None)
+                    or getattr(line, 'qty', None)
+                    or 0
+                )
                 if product.weight:
-                    # Odoo stores weight in kg by default; convert to oz
+                    # Odoo stores weight in kg by default; convert to oz.
                     total_weight_oz += product.weight * 35.274 * qty
                 else:
                     total_weight_oz += self.shipengine_default_weight_oz * qty
         elif picking:
             for move in picking.move_ids:
+                # Pickings never include a "delivery line"; just skip service products
+                if getattr(move.product_id, 'type', 'consu') != 'consu':
+                    continue
                 if move.product_id.weight:
                     total_weight_oz += move.product_id.weight * 35.274 * move.quantity
                 else:
@@ -146,13 +182,20 @@ class DeliveryCarrier(models.Model):
 
         total_weight_oz = max(total_weight_oz, 1.0)  # minimum 1 oz
 
-        return [{
+        packages = [{
             'weight': {
                 'value': round(total_weight_oz, 1),
                 'unit': 'ounce',
             },
             'package_code': self.shipengine_default_package_code or 'package',
         }]
+        _logger.info(
+            'ShipEngine package payload: %.1f oz (%.2f lb) across %d line(s), package_code=%s',
+            total_weight_oz, total_weight_oz / 16.0,
+            len(order_lines) if order_lines else (len(picking.move_ids) if picking else 0),
+            packages[0]['package_code'],
+        )
+        return packages
 
     # ─── Rate Shopping ─────────────────────────────────────────
 
