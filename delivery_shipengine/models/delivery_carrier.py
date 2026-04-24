@@ -140,20 +140,58 @@ class DeliveryCarrier(models.Model):
             return False
         return True
 
+    def _shipengine_weight_unit_to_oz_factor(self):
+        """Return the factor to convert values in ``product.weight``'s configured
+        UoM (kg or lb, per ir.config_parameter ``product.weight_in_lbs``) to ounces.
+
+        1 kg = 35.274 oz, 1 lb = 16 oz.
+        """
+        self.ensure_one()
+        try:
+            uom = self.env['product.template']._get_weight_uom_id_from_ir_config_parameter()
+        except Exception:
+            return 35.274  # conservative default: treat as kg
+        lb_uom = self.env.ref('uom.product_uom_lb', raise_if_not_found=False)
+        if lb_uom and uom and uom.id == lb_uom.id:
+            return 16.0
+        return 35.274
+
     def _shipengine_compute_packages(self, order_lines=None, picking=None):
         """Compute package list from order lines or picking.
         Returns a list of ShipEngine package dicts.
 
-        Matches Odoo's standard ``sale.order._get_estimated_weight`` semantics:
-        only consumable, non-display, non-delivery lines contribute weight. Uses
-        ``product_qty`` when available so UoM conversions (e.g. case→unit) are
-        respected; falls back to ``product_uom_qty`` or ``qty`` otherwise.
+        Weight sources, in order of priority:
+
+        1. ``self.env.context['order_weight']`` — the value typed in the
+           ``Add Shipping`` wizard's Total Order Weight field. Odoo's
+           ``choose.delivery.carrier`` wizard passes this when the user
+           overrides the computed weight before clicking ``Get Rate``.
+        2. Sum of order_lines' ``product.weight × qty``, filtered to
+           consumable, non-display, non-delivery lines (matches Odoo's
+           ``sale.order._get_estimated_weight`` semantics).
+        3. Same as (2), for picking moves.
+
+        Falls back to ``shipengine_default_weight_oz`` per line/move when
+        the product has no weight set.
+
+        All input weights are in the configured product weight UoM (kg by
+        default, lb when ``product.weight_in_lbs`` is set); we convert to
+        ounces before sending to ShipEngine (always in ounces).
         """
         self.ensure_one()
+        to_oz = self._shipengine_weight_unit_to_oz_factor()
         total_weight_oz = 0.0
+        line_count = 0
 
-        if order_lines:
+        # Priority 1: explicit override from the Add Shipping wizard
+        ctx_weight = self.env.context.get('order_weight')
+        if ctx_weight and ctx_weight > 0:
+            total_weight_oz = float(ctx_weight) * to_oz
+            source = 'wizard-override'
+        elif order_lines:
+            source = 'order_lines'
             for line in order_lines:
+                line_count += 1
                 if not self._shipengine_line_contributes_weight(line):
                     continue
                 product = line.product_id
@@ -166,19 +204,21 @@ class DeliveryCarrier(models.Model):
                     or 0
                 )
                 if product.weight:
-                    # Odoo stores weight in kg by default; convert to oz.
-                    total_weight_oz += product.weight * 35.274 * qty
+                    total_weight_oz += product.weight * to_oz * qty
                 else:
                     total_weight_oz += self.shipengine_default_weight_oz * qty
         elif picking:
+            source = 'picking'
             for move in picking.move_ids:
-                # Pickings never include a "delivery line"; just skip service products
+                line_count += 1
                 if getattr(move.product_id, 'type', 'consu') != 'consu':
                     continue
                 if move.product_id.weight:
-                    total_weight_oz += move.product_id.weight * 35.274 * move.quantity
+                    total_weight_oz += move.product_id.weight * to_oz * move.quantity
                 else:
                     total_weight_oz += self.shipengine_default_weight_oz * move.quantity
+        else:
+            source = 'empty'
 
         total_weight_oz = max(total_weight_oz, 1.0)  # minimum 1 oz
 
@@ -190,10 +230,8 @@ class DeliveryCarrier(models.Model):
             'package_code': self.shipengine_default_package_code or 'package',
         }]
         _logger.info(
-            'ShipEngine package payload: %.1f oz (%.2f lb) across %d line(s), package_code=%s',
-            total_weight_oz, total_weight_oz / 16.0,
-            len(order_lines) if order_lines else (len(picking.move_ids) if picking else 0),
-            packages[0]['package_code'],
+            'ShipEngine package payload: %.1f oz (%.2f lb) | source=%s | lines=%d | unit_factor=%.3f',
+            total_weight_oz, total_weight_oz / 16.0, source, line_count, to_oz,
         )
         return packages
 
