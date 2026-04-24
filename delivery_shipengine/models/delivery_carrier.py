@@ -44,8 +44,21 @@ class DeliveryCarrier(models.Model):
         ('png', 'PNG'),
         ('zpl', 'ZPL'),
     ], string='Label Format', default='pdf')
+    shipengine_excluded_service_codes = fields.Char(
+        string='Excluded Service Codes',
+        default='usps_media_mail,usps_library_mail',
+        help='Comma-separated ShipEngine service_codes to exclude from rate shopping. '
+             'USPS Media Mail and Library Mail are restricted to books/educational media '
+             'and should not be used for general goods. Add other restricted services here.',
+    )
 
     # ─── Helpers ───────────────────────────────────────────────
+
+    def _shipengine_excluded_set(self):
+        """Return the set of excluded service_codes for this carrier."""
+        self.ensure_one()
+        raw = self.shipengine_excluded_service_codes or ''
+        return {code.strip() for code in raw.split(',') if code.strip()}
 
     def _shipengine_api_key_get(self):
         """Return the API key, raising if not configured."""
@@ -87,10 +100,11 @@ class DeliveryCarrier(models.Model):
     @staticmethod
     def _shipengine_format_address(partner):
         """Format an Odoo partner into a ShipEngine address dict."""
-        # ShipEngine requires phone — use a placeholder if missing
-        phone = partner.phone or partner.mobile or ''
+        # ShipEngine requires phone — use a placeholder if missing.
+        # Odoo 18+ removed res.partner.mobile; use getattr so older installs still work.
+        phone = partner.phone or getattr(partner, 'mobile', None) or ''
         if not phone and partner.parent_id:
-            phone = partner.parent_id.phone or partner.parent_id.mobile or ''
+            phone = partner.parent_id.phone or getattr(partner.parent_id, 'mobile', None) or ''
         if not phone:
             phone = '0000000000'
 
@@ -176,7 +190,15 @@ class DeliveryCarrier(models.Model):
         return rates
 
     @staticmethod
-    def _shipengine_group_rates_into_tiers(rates):
+    def _shipengine_filter_rates(rates, excluded_service_codes=None):
+        """Drop rates whose service_code is in the excluded set."""
+        excluded = set(excluded_service_codes or [])
+        if not excluded:
+            return list(rates)
+        return [r for r in rates if r.get('service_code', '') not in excluded]
+
+    @staticmethod
+    def _shipengine_group_rates_into_tiers(rates, excluded_service_codes=None):
         """Group raw ShipEngine rates into Express / Standard / Economy tiers.
 
         Returns a list of dicts:
@@ -186,10 +208,17 @@ class DeliveryCarrier(models.Model):
             Express  = cheapest rate with delivery_days < 5
             Standard = cheapest rate with 5 <= delivery_days <= 7
             Economy  = cheapest rate with delivery_days > 7
+
+        Rates whose service_code appears in ``excluded_service_codes`` are skipped.
+        Callers should pass the carrier's blacklist (e.g. USPS Media Mail) to avoid
+        surfacing service codes that are restricted to specific goods.
         """
+        excluded = set(excluded_service_codes or [])
         buckets = {'express': [], 'standard': [], 'economy': []}
 
         for rate in rates:
+            if rate.get('service_code', '') in excluded:
+                continue
             amount = float(rate.get('shipping_amount', {}).get('amount', 0))
             days = rate.get('delivery_days')
             if days is None or amount <= 0:
@@ -236,11 +265,13 @@ class DeliveryCarrier(models.Model):
 
         packages = self._shipengine_compute_packages(order_lines=order_lines, picking=picking)
         raw_rates = self._shipengine_get_rates_raw(warehouse.partner_id, ship_to_partner, packages)
-        tiers = self._shipengine_group_rates_into_tiers(raw_rates)
+        excluded = self._shipengine_excluded_set()
+        tiers = self._shipengine_group_rates_into_tiers(raw_rates, excluded_service_codes=excluded)
 
         return {
             'tiers': tiers,
             'raw_rate_count': len(raw_rates),
+            'excluded_count': sum(1 for r in raw_rates if r.get('service_code', '') in excluded),
         }
 
     # ─── Standard Odoo Carrier Methods ─────────────────────────
@@ -306,11 +337,12 @@ class DeliveryCarrier(models.Model):
                 }
                 label_data = self._shipengine_request('POST', '/v1/labels', payload)
             else:
-                # Get rates first, pick cheapest, then create label
+                # Get rates first, filter out excluded service codes, then pick cheapest
                 raw_rates = self._shipengine_get_rates_raw(ship_from, ship_to, packages)
-                if not raw_rates:
+                eligible = self._shipengine_filter_rates(raw_rates, self._shipengine_excluded_set())
+                if not eligible:
                     raise UserError(_('No shipping rates available for picking %s.', picking.name))
-                cheapest = min(raw_rates, key=lambda r: float(r.get('shipping_amount', {}).get('amount', 9999)))
+                cheapest = min(eligible, key=lambda r: float(r.get('shipping_amount', {}).get('amount', 9999)))
                 payload = {
                     'rate_id': cheapest['rate_id'],
                     'label_format': self.shipengine_label_format or 'pdf',
