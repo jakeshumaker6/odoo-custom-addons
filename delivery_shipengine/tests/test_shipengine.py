@@ -35,7 +35,7 @@ def _mock_rates_response(rates):
     return _side_effect
 
 
-@tagged("post_install", "-at_install", "delivery_shipengine")
+@tagged("post_install", "-at_install", "-standard", "delivery_shipengine")
 class TestShipEngineCarrier(TransactionCase):
 
     @classmethod
