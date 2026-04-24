@@ -190,17 +190,54 @@ class TestShipEngineCarrier(TransactionCase):
 
     def test_compute_packages_converts_kg_to_oz(self):
         line = types.SimpleNamespace(
-            product_id=types.SimpleNamespace(weight=2.0),
-            product_uom_qty=3,
+            product_id=types.SimpleNamespace(weight=2.0, type="consu"),
+            product_qty=3, product_uom_qty=3,
+            is_delivery=False, display_type=False,
         )
         pkgs = self.carrier._shipengine_compute_packages(order_lines=[line])
         # 2 kg * 35.274 oz/kg * 3 qty = 211.6
         self.assertAlmostEqual(pkgs[0]["weight"]["value"], 211.6, places=1)
 
+    def test_compute_packages_skips_delivery_line(self):
+        """The delivery line is a service and must not double-contribute weight."""
+        product_line = types.SimpleNamespace(
+            product_id=types.SimpleNamespace(weight=1.0, type="consu"),
+            product_qty=1, product_uom_qty=1,
+            is_delivery=False, display_type=False,
+        )
+        delivery_line = types.SimpleNamespace(
+            product_id=types.SimpleNamespace(weight=0.0, type="service"),
+            product_qty=1, product_uom_qty=1,
+            is_delivery=True, display_type=False,
+        )
+        pkgs = self.carrier._shipengine_compute_packages(order_lines=[product_line, delivery_line])
+        # Only the 1 kg consumable should contribute: 1 * 35.274 = 35.3 oz
+        self.assertAlmostEqual(pkgs[0]["weight"]["value"], 35.3, places=1)
+
+    def test_compute_packages_skips_service_products(self):
+        service_line = types.SimpleNamespace(
+            product_id=types.SimpleNamespace(weight=0.0, type="service"),
+            product_qty=5, product_uom_qty=5,
+            is_delivery=False, display_type=False,
+        )
+        pkgs = self.carrier._shipengine_compute_packages(order_lines=[service_line])
+        # No consumable lines → min 1 oz
+        self.assertEqual(pkgs[0]["weight"]["value"], 1.0)
+
+    def test_compute_packages_skips_display_type_lines(self):
+        section_line = types.SimpleNamespace(
+            product_id=types.SimpleNamespace(weight=0.0, type="consu"),
+            product_qty=1, product_uom_qty=1,
+            is_delivery=False, display_type="line_section",
+        )
+        pkgs = self.carrier._shipengine_compute_packages(order_lines=[section_line])
+        self.assertEqual(pkgs[0]["weight"]["value"], 1.0)
+
     def test_compute_packages_falls_back_to_default_weight(self):
         line = types.SimpleNamespace(
-            product_id=types.SimpleNamespace(weight=0.0),
-            product_uom_qty=2,
+            product_id=types.SimpleNamespace(weight=0.0, type="consu"),
+            product_qty=2, product_uom_qty=2,
+            is_delivery=False, display_type=False,
         )
         pkgs = self.carrier._shipengine_compute_packages(order_lines=[line])
         # 16 oz default * 2 qty = 32
