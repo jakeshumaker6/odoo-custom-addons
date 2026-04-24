@@ -1,0 +1,34 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <!--
+        Hide the Cost label + display_price field on the "Add Shipping" wizard
+        when no rate has been calculated yet, and the selected carrier is an
+        API-based one (i.e. not fixed / base_on_rule, which compute locally).
+
+        Odoo's built-in onchange already resets display_price to 0 when the
+        user changes total_weight or carrier_id for API-based carriers (see
+        delivery.wizard.choose_delivery_carrier._onchange_carrier_id: the
+        else branch zeroes display_price + delivery_price). But the view
+        still renders "$0.00" until the user clicks Get rate and the API
+        round-trip completes (~3s for ShipEngine), which reads visually as
+        a stale price that then updates.
+
+        This inherit hides the price entirely until a real value is present,
+        making "no number visible" the explicit signal that the user must
+        click Get rate. Fixed/base_on_rule carriers keep the immediate-price
+        behavior unchanged.
+    -->
+    <record id="view_choose_delivery_carrier_hide_stale_price" model="ir.ui.view">
+        <field name="name">choose.delivery.carrier.form.hide.stale.price</field>
+        <field name="model">choose.delivery.carrier</field>
+        <field name="inherit_id" ref="delivery.choose_delivery_carrier_view_form"/>
+        <field name="arch" type="xml">
+            <xpath expr="//field[@name='display_price']" position="attributes">
+                <attribute name="invisible">not carrier_id or (not display_price and delivery_type not in ('fixed', 'base_on_rule'))</attribute>
+            </xpath>
+            <xpath expr="//label[@for='display_price']" position="attributes">
+                <attribute name="invisible">not carrier_id or (not display_price and delivery_type not in ('fixed', 'base_on_rule'))</attribute>
+            </xpath>
+        </field>
+    </record>
+</odoo>

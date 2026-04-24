@@ -1,6 +1,6 @@
 {
     'name': 'ShipEngine Shipping',
-    'version': '19.0.1.3.0',
+    'version': '19.0.1.4.0',
     'category': 'Inventory/Delivery',
     'summary': 'Ship via ShipEngine — multi-carrier rate shopping, label printing, and tracking',
     'description': """
@@ -13,6 +13,7 @@ Includes label generation and tracking.
     'depends': ['delivery', 'stock'],
     'data': [
         'views/delivery_carrier_views.xml',
+        'views/choose_delivery_carrier_views.xml',
         'data/delivery_data.xml',
     ],
     'installable': True,
