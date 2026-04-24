@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 {
     'name': 'Mail Composer CC/BCC',
-    'version': '19.0.1.1.0',
+    'version': '19.0.1.2.0',
     'summary': 'Add CC and BCC fields to email composer',
     'description': """
 Mail Composer CC/BCC
