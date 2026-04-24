@@ -17,6 +17,8 @@
                     <field name="shipengine_label_format"/>
                     <field name="shipengine_excluded_service_codes"
                            placeholder="e.g., usps_media_mail,usps_library_mail"/>
+                    <field name="shipengine_excluded_package_types"
+                           placeholder="e.g., flat_rate_envelope,small_flat_rate_box"/>
                 </group>
             </xpath>
         </field>

@@ -51,6 +51,20 @@ class DeliveryCarrier(models.Model):
              'USPS Media Mail and Library Mail are restricted to books/educational media '
              'and should not be used for general goods. Add other restricted services here.',
     )
+    shipengine_excluded_package_types = fields.Char(
+        string='Excluded Package Types',
+        default=(
+            'flat_rate_envelope,flat_rate_legal_envelope,flat_rate_padded_envelope,'
+            'small_flat_rate_box,medium_flat_rate_box,large_flat_rate_box,'
+            'regional_rate_box_a,regional_rate_box_b,regional_rate_box_c'
+        ),
+        help='Comma-separated ShipEngine package_type values to exclude from rate '
+             'shopping. USPS Priority Mail flat-rate envelopes and boxes appear '
+             'cheap (~$8.90) but are size-constrained to USPS-supplied packaging. '
+             'For general merchandise that does not fit in those specific boxes, '
+             'keep them excluded so real weight-based rates (Ground Advantage, UPS '
+             'Ground, etc.) win the rate shopping.',
+    )
 
     # ─── Helpers ───────────────────────────────────────────────
 
@@ -58,6 +72,12 @@ class DeliveryCarrier(models.Model):
         """Return the set of excluded service_codes for this carrier."""
         self.ensure_one()
         raw = self.shipengine_excluded_service_codes or ''
+        return {code.strip() for code in raw.split(',') if code.strip()}
+
+    def _shipengine_excluded_package_types_set(self):
+        """Return the set of excluded package_type values for this carrier."""
+        self.ensure_one()
+        raw = self.shipengine_excluded_package_types or ''
         return {code.strip() for code in raw.split(',') if code.strip()}
 
     def _shipengine_api_key_get(self):
@@ -271,15 +291,30 @@ class DeliveryCarrier(models.Model):
         return rates
 
     @staticmethod
-    def _shipengine_filter_rates(rates, excluded_service_codes=None):
-        """Drop rates whose service_code is in the excluded set."""
-        excluded = set(excluded_service_codes or [])
-        if not excluded:
+    def _shipengine_filter_rates(rates, excluded_service_codes=None, excluded_package_types=None):
+        """Drop rates whose service_code or package_type is in the excluded set.
+
+        ShipEngine's /v1/rates returns multiple rates per service (e.g. USPS
+        Priority Mail returns one rate per flat_rate_envelope / small_flat_rate_box
+        / medium_flat_rate_box / ... variant, all under the SAME service_code).
+        Filter on both dimensions so we can keep weight-based Priority Mail while
+        dropping the flat-rate sub-variants that are size-constrained.
+        """
+        excluded_services = set(excluded_service_codes or [])
+        excluded_packages = set(excluded_package_types or [])
+        if not excluded_services and not excluded_packages:
             return list(rates)
-        return [r for r in rates if r.get('service_code', '') not in excluded]
+        out = []
+        for r in rates:
+            if r.get('service_code', '') in excluded_services:
+                continue
+            if r.get('package_type', '') in excluded_packages:
+                continue
+            out.append(r)
+        return out
 
     @staticmethod
-    def _shipengine_group_rates_into_tiers(rates, excluded_service_codes=None):
+    def _shipengine_group_rates_into_tiers(rates, excluded_service_codes=None, excluded_package_types=None):
         """Group raw ShipEngine rates into Express / Standard / Economy tiers.
 
         Returns a list of dicts:
@@ -290,15 +325,20 @@ class DeliveryCarrier(models.Model):
             Standard = cheapest rate with 5 <= delivery_days <= 7
             Economy  = cheapest rate with delivery_days > 7
 
-        Rates whose service_code appears in ``excluded_service_codes`` are skipped.
-        Callers should pass the carrier's blacklist (e.g. USPS Media Mail) to avoid
-        surfacing service codes that are restricted to specific goods.
+        Rates are skipped when their service_code appears in
+        ``excluded_service_codes`` (e.g. USPS Media Mail) OR when their
+        package_type appears in ``excluded_package_types`` (e.g. USPS Priority
+        Mail flat-rate envelope / small_flat_rate_box). Both defaults keep our
+        tier picks honest for general S40S merchandise.
         """
-        excluded = set(excluded_service_codes or [])
+        excluded_services = set(excluded_service_codes or [])
+        excluded_packages = set(excluded_package_types or [])
         buckets = {'express': [], 'standard': [], 'economy': []}
 
         for rate in rates:
-            if rate.get('service_code', '') in excluded:
+            if rate.get('service_code', '') in excluded_services:
+                continue
+            if rate.get('package_type', '') in excluded_packages:
                 continue
             amount = float(rate.get('shipping_amount', {}).get('amount', 0))
             days = rate.get('delivery_days')
@@ -309,6 +349,7 @@ class DeliveryCarrier(models.Model):
                 'carrier_name': rate.get('carrier_friendly_name', rate.get('carrier_id', '')),
                 'service_type': rate.get('service_type', ''),
                 'service_code': rate.get('service_code', ''),
+                'package_type': rate.get('package_type', ''),
                 'rate_id': rate.get('rate_id', ''),
                 'amount': amount,
                 'delivery_days': days,
@@ -346,13 +387,22 @@ class DeliveryCarrier(models.Model):
 
         packages = self._shipengine_compute_packages(order_lines=order_lines, picking=picking)
         raw_rates = self._shipengine_get_rates_raw(warehouse.partner_id, ship_to_partner, packages)
-        excluded = self._shipengine_excluded_set()
-        tiers = self._shipengine_group_rates_into_tiers(raw_rates, excluded_service_codes=excluded)
+        excluded_svcs = self._shipengine_excluded_set()
+        excluded_pkgs = self._shipengine_excluded_package_types_set()
+        tiers = self._shipengine_group_rates_into_tiers(
+            raw_rates,
+            excluded_service_codes=excluded_svcs,
+            excluded_package_types=excluded_pkgs,
+        )
 
         return {
             'tiers': tiers,
             'raw_rate_count': len(raw_rates),
-            'excluded_count': sum(1 for r in raw_rates if r.get('service_code', '') in excluded),
+            'excluded_count': sum(
+                1 for r in raw_rates
+                if r.get('service_code', '') in excluded_svcs
+                or r.get('package_type', '') in excluded_pkgs
+            ),
         }
 
     # ─── Standard Odoo Carrier Methods ─────────────────────────
@@ -418,9 +468,14 @@ class DeliveryCarrier(models.Model):
                 }
                 label_data = self._shipengine_request('POST', '/v1/labels', payload)
             else:
-                # Get rates first, filter out excluded service codes, then pick cheapest
+                # Get rates first, filter out excluded service codes AND excluded
+                # package types (USPS flat-rate envelope/box variants), then pick cheapest
                 raw_rates = self._shipengine_get_rates_raw(ship_from, ship_to, packages)
-                eligible = self._shipengine_filter_rates(raw_rates, self._shipengine_excluded_set())
+                eligible = self._shipengine_filter_rates(
+                    raw_rates,
+                    excluded_service_codes=self._shipengine_excluded_set(),
+                    excluded_package_types=self._shipengine_excluded_package_types_set(),
+                )
                 if not eligible:
                     raise UserError(_('No shipping rates available for picking %s.', picking.name))
                 cheapest = min(eligible, key=lambda r: float(r.get('shipping_amount', {}).get('amount', 9999)))
