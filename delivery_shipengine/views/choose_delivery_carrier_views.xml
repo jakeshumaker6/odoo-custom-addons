@@ -1,70 +1,33 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
     <!--
-        Add Shipping wizard UX hardening for API-based carriers (ShipEngine +
-        any non-fixed / non-base_on_rule carrier).
+        Hide the Cost label + display_price field on the "Add Shipping" wizard
+        when no rate has been calculated yet, and the selected carrier is an
+        API-based one (i.e. not fixed / base_on_rule, which compute locally).
 
-        Gates the Cost / display_price field AND the Add button on a new
-        `rate_is_current` boolean we add via inherit on choose.delivery.carrier.
-        The field is True only when display_price reflects a successful rate
-        fetch for the CURRENT total_weight — cleared the instant the user
-        changes weight or carrier, and set back to True after _get_delivery_rate
-        returns a non-error response.
+        Odoo's built-in onchange already resets display_price to 0 when the
+        user changes total_weight or carrier_id for API-based carriers (see
+        delivery.wizard.choose_delivery_carrier._onchange_carrier_id: the
+        else branch zeroes display_price + delivery_price). But the view
+        still renders "$0.00" until the user clicks Get rate and the API
+        round-trip completes (~3s for ShipEngine), which reads visually as
+        a stale price that then updates.
 
-        Why two gates (display + Add) instead of just one:
-
-        - Hiding display_price alone eliminates the visible $0 flash between
-          weight-change and fetch completion (19.0.1.4.0).
-        - But during the ~3s API round-trip triggered by Get rate, Odoo's
-          act_window reopen can briefly surface the previous weight's rate
-          in the refreshed dialog before the new record fetch completes.
-          If the user clicks Add during that flash they'd commit the WRONG
-          rate to the sale order.
-        - So we also gate the Add button: while rate_is_current is False,
-          the button is hidden regardless of display_price value.
-
-        Fixed / base_on_rule carriers: rate_is_current is set True in the
-        onchange (rates compute synchronously, never stale). No regression.
+        This inherit hides the price entirely until a real value is present,
+        making "no number visible" the explicit signal that the user must
+        click Get rate. Fixed/base_on_rule carriers keep the immediate-price
+        behavior unchanged.
     -->
-    <record id="view_choose_delivery_carrier_rate_current_gate" model="ir.ui.view">
-        <field name="name">choose.delivery.carrier.form.rate.current.gate</field>
+    <record id="view_choose_delivery_carrier_hide_stale_price" model="ir.ui.view">
+        <field name="name">choose.delivery.carrier.form.hide.stale.price</field>
         <field name="model">choose.delivery.carrier</field>
         <field name="inherit_id" ref="delivery.choose_delivery_carrier_view_form"/>
         <field name="arch" type="xml">
-
-            <!-- Expose the rate_is_current field to the form arch so its value
-                 is available in invisible expressions below. Kept invisible to
-                 users; purely a gate. -->
-            <xpath expr="//field[@name='delivery_price']" position="after">
-                <field name="rate_is_current" invisible="1"/>
-            </xpath>
-
-            <!-- Hide Cost label + price field when rate isn't current (API carriers) -->
             <xpath expr="//field[@name='display_price']" position="attributes">
-                <attribute name="invisible">not carrier_id or (not rate_is_current and delivery_type not in ('fixed', 'base_on_rule'))</attribute>
+                <attribute name="invisible">not carrier_id or (not display_price and delivery_type not in ('fixed', 'base_on_rule'))</attribute>
             </xpath>
             <xpath expr="//label[@for='display_price']" position="attributes">
-                <attribute name="invisible">not carrier_id or (not rate_is_current and delivery_type not in ('fixed', 'base_on_rule'))</attribute>
-            </xpath>
-
-            <!--
-                The base wizard defines three buttons with name='button_confirm'.
-                The second one (the real Add) is shown when either fixed/rule
-                carrier OR display_price > 0. We extend its invisible to ALSO
-                require rate_is_current for API carriers.
-
-                Using position='replace' on just that button would require
-                matching by a unique xpath locator. Instead we re-declare it
-                via attributes on the specific string/confirm combination.
-            -->
-            <xpath expr="//footer/button[@name='button_confirm'][not(@confirm)][@string='Add']" position="attributes">
-                <attribute name="invisible">context.get('carrier_recompute') or (not delivery_type in ('fixed', 'base_on_rule') and (not display_price or not rate_is_current))</attribute>
-            </xpath>
-
-            <!-- The "free delivery confirmation" Add (third button, has confirm=) —
-                 only appropriate if a rate was actually fetched and came back 0. -->
-            <xpath expr="//footer/button[@name='button_confirm'][@confirm]" position="attributes">
-                <attribute name="invisible">context.get('carrier_recompute') or display_price or delivery_type in ('fixed', 'base_on_rule') or not rate_is_current</attribute>
+                <attribute name="invisible">not carrier_id or (not display_price and delivery_type not in ('fixed', 'base_on_rule'))</attribute>
             </xpath>
         </field>
     </record>
