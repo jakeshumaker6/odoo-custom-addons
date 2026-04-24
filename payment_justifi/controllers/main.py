@@ -5,7 +5,7 @@ import hmac
 import json
 import logging
 
-from odoo import http
+from odoo import _, http
 from odoo.http import request
 from odoo.exceptions import ValidationError
 
@@ -283,6 +283,8 @@ class JustiFiController(http.Controller):
                 self._handle_payment_success(provider, event_data)
             elif event_type == 'payment.failed':
                 self._handle_payment_failure(provider, event_data)
+            elif event_type in ('refund.succeeded', 'refund.updated', 'refund.failed'):
+                self._handle_refund_update(provider, event_data)
             else:
                 _logger.info("JustiFi: Unhandled event type: %s", event_type)
 
@@ -368,6 +370,68 @@ class JustiFiController(http.Controller):
         if not wizard.exists() or not wizard.checkout_id:
             return {'error': 'Invalid wizard or no checkout'}
         return wizard._check_and_update_status()
+
+    def _handle_refund_update(self, provider, event_data):
+        """
+        Handle a JustiFi refund.* webhook.
+
+        The refund's child transaction stores the JustiFi refund ID (re_xxx)
+        in ``provider_reference`` — we match on that. Only transitions refund
+        transactions that are still pending, to avoid reopening settled state.
+
+        :param provider: The JustiFi payment provider
+        :param event_data: The ``data`` block from the webhook payload
+        """
+        refund_id = event_data.get('id', '')
+        status = event_data.get('status', '')
+
+        _logger.info(
+            "JustiFi: Processing refund webhook: id=%s, status=%s",
+            refund_id, status,
+        )
+
+        if not refund_id:
+            _logger.warning("JustiFi: Refund webhook missing id; ignoring")
+            return
+
+        tx = request.env['payment.transaction'].sudo().search([
+            ('provider_reference', '=', refund_id),
+            ('provider_id', '=', provider.id),
+            ('operation', '=', 'refund'),
+        ], limit=1)
+
+        if not tx:
+            _logger.warning(
+                "JustiFi: Refund transaction not found for refund_id=%s", refund_id,
+            )
+            return
+
+        if tx.state in ('done', 'cancel'):
+            _logger.info(
+                "JustiFi: Refund %s already in terminal state %s; ignoring webhook",
+                tx.reference, tx.state,
+            )
+            return
+
+        if status == 'succeeded':
+            tx._set_done()
+            try:
+                tx._post_process()
+            except Exception as e:
+                _logger.exception(
+                    "JustiFi: Post-processing failed for refund webhook %s: %s",
+                    tx.reference, str(e),
+                )
+        elif status == 'failed':
+            err = event_data.get('error', {}).get('message') or _("Refund failed")
+            tx._set_error(_("JustiFi: %s") % err)
+        elif status == 'pending':
+            tx._set_pending()
+        else:
+            _logger.info(
+                "JustiFi: Refund %s received unmapped status '%s'; leaving state unchanged",
+                tx.reference, status,
+            )
 
     def _handle_payment_failure(self, provider, event_data):
         """

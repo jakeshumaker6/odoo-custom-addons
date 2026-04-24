@@ -13,6 +13,8 @@ from ..const import (
     WEB_COMPONENT_TOKEN_URL,
     TERMINALS_URL,
     PAYMENTS_URL,
+    REFUND_REASONS,
+    DEFAULT_REFUND_REASON,
     SUPPORTED_CURRENCIES,
     PAYMENT_METHOD_CODES_CARD,
     PAYMENT_METHOD_CODES_ACH,
@@ -102,7 +104,7 @@ class PaymentProvider(models.Model):
             provider.support_tokenization = False  # Not implementing saved cards initially
             provider.support_manual_capture = False
             provider.support_express_checkout = False
-            provider.support_refund = False  # Can be added later
+            provider.support_refund = 'partial'  # JustiFi accepts arbitrary refund amount
 
     # === BUSINESS METHODS ===#
 
@@ -684,3 +686,91 @@ class PaymentProvider(models.Model):
         except Exception as exc:
             _logger.warning("JustiFi: Error getting payment details: %s", exc)
             return {}
+
+    def _justifi_create_refund(self, payment_id, amount_cents, reason=None,
+                                description=None, idempotency_key=None, metadata=None):
+        """
+        Create a refund against a JustiFi payment.
+
+        API: POST /v1/payments/{payment_id}/refunds
+
+        :param str payment_id: The JustiFi payment ID (py_xxx) to refund
+        :param int amount_cents: Refund amount in cents (must be > 0 and <= original payment)
+        :param str reason: One of REFUND_REASONS; defaults to DEFAULT_REFUND_REASON
+        :param str description: Optional free-text context recorded on the refund
+        :param str idempotency_key: Required by JustiFi; caller should pass the refund
+                                    transaction reference so retries converge on the same refund
+        :param dict metadata: Optional key/value pairs stored on the refund
+        :return: Refund data dict with keys like id, status, amount, reason
+        :raises ValidationError: On network error or non-2xx response
+        """
+        self.ensure_one()
+
+        if not payment_id:
+            raise ValidationError(_("JustiFi: Missing payment ID for refund."))
+        if not amount_cents or amount_cents <= 0:
+            raise ValidationError(_("JustiFi: Refund amount must be positive."))
+        if not idempotency_key:
+            idempotency_key = str(uuid.uuid4())
+
+        reason = reason or DEFAULT_REFUND_REASON
+        if reason not in REFUND_REASONS:
+            raise ValidationError(_(
+                "JustiFi: Refund reason '%s' is not supported. Use one of: %s"
+            ) % (reason, ', '.join(REFUND_REASONS)))
+
+        access_token = self._justifi_get_access_token()
+
+        headers = {
+            'Authorization': f'Bearer {access_token}',
+            'Content-Type': 'application/json',
+            'Sub-Account': self.justifi_account_id,
+            'Idempotency-Key': idempotency_key,
+        }
+
+        payload = {
+            'amount': amount_cents,
+            'reason': reason,
+        }
+        if description:
+            payload['description'] = description
+        if metadata:
+            payload['metadata'] = metadata
+
+        url = f'{PAYMENTS_URL}/{payment_id}/refunds'
+
+        _logger.info(
+            "JustiFi: Creating refund for payment %s, amount=%s cents, reason=%s, idem=%s",
+            payment_id, amount_cents, reason, idempotency_key,
+        )
+
+        try:
+            response = requests.post(url, json=payload, headers=headers, timeout=30)
+        except requests.exceptions.RequestException as e:
+            _logger.error("JustiFi: Network error creating refund: %s", str(e))
+            raise ValidationError(_("Could not connect to JustiFi. Please try again later."))
+
+        if response.status_code >= 400:
+            _logger.error(
+                "JustiFi: Failed to create refund. Status: %s, Response: %s",
+                response.status_code, response.text,
+            )
+            error_msg = "Refund failed"
+            try:
+                error_data = response.json()
+                if 'error' in error_data and 'message' in error_data['error']:
+                    error_msg = error_data['error']['message']
+                elif 'errors' in error_data and error_data['errors']:
+                    first = error_data['errors'][0]
+                    error_msg = first.get('message') or first.get('code') or error_msg
+            except Exception:
+                pass
+            raise ValidationError(_("JustiFi: %s") % error_msg)
+
+        data = response.json()
+        refund = data.get('data', data)
+        _logger.info(
+            "JustiFi: Refund created: id=%s, status=%s",
+            refund.get('id'), refund.get('status'),
+        )
+        return refund

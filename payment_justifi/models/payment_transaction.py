@@ -5,7 +5,7 @@ import logging
 from odoo import _, models
 from odoo.exceptions import ValidationError
 
-from ..const import STATUS_MAPPING
+from ..const import STATUS_MAPPING, DEFAULT_REFUND_REASON
 
 _logger = logging.getLogger(__name__)
 
@@ -150,6 +150,89 @@ class PaymentTransaction(models.Model):
             self._set_error(f"JustiFi: {error_msg}")
         elif odoo_state == 'cancel':
             self._set_canceled()
+
+    def _send_refund_request(self):
+        """
+        Process a JustiFi refund request for a child refund transaction.
+
+        Called by Odoo's :meth:`~payment.transaction._refund` on the refund child
+        transaction (operation='refund', signed-negative amount). The original
+        transaction is :attr:`source_transaction_id`; its ``provider_reference``
+        holds the JustiFi payment ID (py_xxx) we need to refund against.
+
+        On sync success JustiFi returns status='succeeded'; ACH refunds return
+        'pending' and later resolve via webhook. Failed responses raise
+        ValidationError — :meth:`_refund` catches that and calls ``_set_error``.
+        """
+        if self.provider_code != 'justifi':
+            return super()._send_refund_request()
+
+        source_tx = self.source_transaction_id
+        if not source_tx:
+            raise ValidationError(_("JustiFi: Refund requires a source transaction."))
+
+        payment_id = source_tx.provider_reference
+        if not payment_id or not payment_id.startswith('py_'):
+            raise ValidationError(_(
+                "JustiFi: Source transaction %s has no payment ID. "
+                "Refunds are only supported after the original payment has settled."
+            ) % source_tx.reference)
+
+        # Refund tx amount is signed-negative per Odoo core; JustiFi wants positive cents
+        amount_cents = int(round(abs(self.amount) * 100))
+
+        description = _("Refund for %s") % source_tx.reference
+        if self.invoice_ids:
+            # Credit notes refunding through a transaction — include doc name in description
+            description = _("Refund for %s (%s)") % (
+                source_tx.reference,
+                ', '.join(self.invoice_ids.mapped('name')),
+            )
+
+        try:
+            refund_data = self.provider_id._justifi_create_refund(
+                payment_id=payment_id,
+                amount_cents=amount_cents,
+                reason=DEFAULT_REFUND_REASON,
+                description=description,
+                idempotency_key=self.reference,  # stable across retries
+            )
+        except ValidationError:
+            raise
+        except Exception as e:
+            _logger.exception("JustiFi: Unexpected error creating refund for %s: %s",
+                              self.reference, str(e))
+            raise ValidationError(_("JustiFi: Refund request failed: %s") % str(e))
+
+        refund_id = refund_data.get('id')
+        status = refund_data.get('status', '')
+
+        if refund_id:
+            self.provider_reference = refund_id
+
+        odoo_state = STATUS_MAPPING.get(status, 'pending')
+        if odoo_state == 'done':
+            self._set_done()
+            try:
+                self._post_process()
+            except Exception as e:
+                _logger.exception(
+                    "JustiFi: Post-processing failed for refund %s: %s",
+                    self.reference, str(e),
+                )
+        elif odoo_state == 'pending':
+            self._set_pending()
+        elif odoo_state == 'error':
+            self._set_error(_("JustiFi: Refund failed (status=%s).") % status)
+        elif odoo_state == 'cancel':
+            self._set_canceled()
+        else:
+            # refund_in_progress or any unmapped value — treat as pending for visibility
+            _logger.warning(
+                "JustiFi: Unmapped refund status '%s' for %s; leaving as pending",
+                status, self.reference,
+            )
+            self._set_pending()
 
     @staticmethod
     def _justifi_get_tx_from_notification_data(provider, notification_data):
