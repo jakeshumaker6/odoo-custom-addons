@@ -15,6 +15,8 @@
                     <field name="shipengine_default_weight_oz"/>
                     <field name="shipengine_default_package_code"/>
                     <field name="shipengine_label_format"/>
+                    <field name="shipengine_excluded_service_codes"
+                           placeholder="e.g., usps_media_mail,usps_library_mail"/>
                 </group>
             </xpath>
         </field>

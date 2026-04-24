@@ -8,7 +8,7 @@ _logger = logging.getLogger(__name__)
 
 class PosShipEngineController(http.Controller):
 
-    @http.route('/pos_shipengine/get_rates', type='json', auth='user')
+    @http.route('/pos_shipengine/get_rates', type='jsonrpc', auth='user')
     def get_rates(self, partner_id, config_id, order_line_data=None):
         """Fetch ShipEngine shipping rates for a POS Ship Later order.
 
