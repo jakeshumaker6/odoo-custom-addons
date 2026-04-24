@@ -9,6 +9,8 @@ from odoo import http
 from odoo.http import request
 from odoo.exceptions import ValidationError
 
+from ..const import DISPUTE_EVENT_TYPES
+
 _logger = logging.getLogger(__name__)
 
 
@@ -283,6 +285,8 @@ class JustiFiController(http.Controller):
                 self._handle_payment_success(provider, event_data)
             elif event_type == 'payment.failed':
                 self._handle_payment_failure(provider, event_data)
+            elif event_type in DISPUTE_EVENT_TYPES:
+                self._handle_dispute_event(provider, event_type, event_data)
             else:
                 _logger.info("JustiFi: Unhandled event type: %s", event_type)
 
@@ -392,3 +396,61 @@ class JustiFiController(http.Controller):
             event_data['checkout_id'] = checkout_id
             tx._justifi_process_payment_data(event_data)
             _logger.info("JustiFi: Transaction %s marked as failed via webhook", tx.reference)
+
+    def _handle_dispute_event(self, provider, event_type, event_data):
+        """
+        Handle a JustiFi dispute webhook.
+
+        Handles ``payment.disputed`` (high-level marker — fires on credit-card
+        chargebacks AND ACH returns, since JustiFi models ACH returns as
+        disputes) and the granular ``dispute.*`` lifecycle events.
+
+        Disputes reference the original payment by ID, not the checkout. We
+        try several field names because JustiFi's public docs don't enumerate
+        the exact payload shape — if none match, we still log the full event
+        so the first production event tells us what to adjust.
+
+        :param provider: The JustiFi payment provider recordset
+        :param str event_type: The JustiFi event name (e.g. ``dispute.lost``)
+        :param dict event_data: The ``data`` block from the webhook payload
+        """
+        payment_id = (
+            event_data.get('payment_id')
+            or event_data.get('payment')
+            or event_data.get('successful_payment_id')
+            or ''
+        )
+        dispute_id = event_data.get('id', '')
+
+        _logger.info(
+            "JustiFi: Processing dispute webhook: event=%s dispute=%s payment=%s",
+            event_type, dispute_id, payment_id,
+        )
+
+        if not payment_id:
+            _logger.error(
+                "JustiFi: Dispute webhook missing payment_id; cannot route. "
+                "Full event data: %s", event_data,
+            )
+            return
+
+        tx = request.env['payment.transaction'].sudo().search([
+            ('provider_reference', '=', payment_id),
+            ('provider_id', '=', provider.id),
+        ], limit=1)
+
+        if not tx:
+            _logger.error(
+                "JustiFi: No transaction found for disputed payment %s "
+                "(dispute %s, event %s). This dispute will not be processed.",
+                payment_id, dispute_id, event_type,
+            )
+            return
+
+        try:
+            tx._justifi_handle_dispute(event_type, event_data)
+        except Exception as e:
+            _logger.exception(
+                "JustiFi: Error handling dispute %s for tx %s: %s",
+                dispute_id, tx.reference, str(e),
+            )

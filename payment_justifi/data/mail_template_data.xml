@@ -1,0 +1,64 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+
+    <!--
+        Customer email sent when a JustiFi payment is reversed due to dispute
+        or ACH return. Rendered with context {is_ach_return, reason_code}
+        passed from payment.transaction._justifi_notify_customer_of_return.
+    -->
+    <record id="mail_template_dispute_lost" model="mail.template">
+        <field name="name">JustiFi: Payment Reversed — Invoice Reopened</field>
+        <field name="model_id" ref="account.model_account_move"/>
+        <field name="subject">Action required: Payment for invoice {{ object.name }} was returned</field>
+        <field name="email_from">{{ (object.invoice_user_id.email_formatted or object.company_id.email_formatted) }}</field>
+        <field name="email_to">{{ object.partner_id.email_formatted }}</field>
+        <field name="lang">{{ object.partner_id.lang }}</field>
+        <field name="auto_delete" eval="False"/>
+        <field name="body_html" type="html">
+            <div style="margin: 0px; padding: 0px;">
+                <p style="margin: 0px; padding: 0px; font-size: 13px;">
+                    Dear <t t-out="object.partner_id.name or ''"/>,
+                </p>
+                <p style="margin: 12px 0; padding: 0px; font-size: 13px;">
+                    <t t-if="ctx.get('is_ach_return')">
+                        We were notified by our payment processor that the ACH payment
+                        for invoice <strong t-out="object.name or ''"/> was returned by your bank.
+                    </t>
+                    <t t-else="">
+                        We were notified by our payment processor that the payment for
+                        invoice <strong t-out="object.name or ''"/> has been reversed.
+                    </t>
+                </p>
+                <p style="margin: 12px 0; padding: 0px; font-size: 13px;">
+                    <t t-if="ctx.get('reason_code') == 'R01'">
+                        The reason provided was <strong>insufficient funds</strong>.
+                    </t>
+                    <t t-elif="ctx.get('reason_code') == 'R02'">
+                        The reason provided was <strong>account closed</strong>.
+                    </t>
+                    <t t-elif="ctx.get('reason_code') in ('R03', 'R04')">
+                        The reason provided was <strong>invalid or unknown account</strong>.
+                    </t>
+                    <t t-elif="ctx.get('reason_code')">
+                        The bank return code was <strong t-out="ctx.get('reason_code') or ''"/>.
+                    </t>
+                </p>
+                <p style="margin: 12px 0; padding: 0px; font-size: 13px;">
+                    As a result, invoice <strong t-out="object.name or ''"/> for
+                    <strong t-out="format_amount(object.amount_total, object.currency_id) or ''"/>
+                    has been reopened and is now due again.
+                </p>
+                <p style="margin: 12px 0; padding: 0px; font-size: 13px;">
+                    Please submit a new payment at your earliest convenience. If you have
+                    any questions or need to update your payment method, reply to this
+                    email and we will follow up directly.
+                </p>
+                <p style="margin: 12px 0; padding: 0px; font-size: 13px;">
+                    Thank you,<br/>
+                    <t t-out="object.company_id.name or ''"/>
+                </p>
+            </div>
+        </field>
+    </record>
+
+</odoo>

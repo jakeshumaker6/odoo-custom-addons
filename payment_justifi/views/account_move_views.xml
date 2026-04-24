@@ -1,12 +1,38 @@
 <?xml version="1.0" encoding="utf-8"?>
 <odoo>
 
-    <!-- Add JustiFi payment methods field to Invoice form -->
+    <!-- Add JustiFi payment methods field + dispute banner to Invoice form -->
     <record id="view_move_form_justifi" model="ir.ui.view">
         <field name="name">account.move.form.justifi</field>
         <field name="model">account.move</field>
         <field name="inherit_id" ref="account.view_move_form"/>
         <field name="arch" type="xml">
+            <!-- Dispute banner at top of invoice form — highest priority visibility -->
+            <xpath expr="//sheet" position="before">
+                <div class="alert alert-warning mb-0"
+                     role="alert"
+                     invisible="justifi_dispute_state != 'open'">
+                    <strong>⚠ JustiFi dispute open</strong> — the payment on this invoice
+                    is currently under review.
+                    <field name="justifi_dispute_reason" readonly="1" nolabel="1" class="d-inline"/>
+                    <span invisible="not justifi_dispute_id">
+                        (Dispute <field name="justifi_dispute_id" readonly="1" nolabel="1" class="d-inline"/>)
+                    </span>
+                </div>
+                <div class="alert alert-danger mb-0"
+                     role="alert"
+                     invisible="justifi_dispute_state != 'lost'">
+                    <strong>⚠ Payment reversed</strong> — the JustiFi dispute was lost,
+                    so this invoice has been reopened and is owed again.
+                    <field name="justifi_dispute_reason" readonly="1" nolabel="1" class="d-inline"/>
+                </div>
+                <div class="alert alert-success mb-0"
+                     role="alert"
+                     invisible="justifi_dispute_state != 'won'">
+                    <strong>✓ Dispute resolved in our favor</strong> — no action required.
+                </div>
+            </xpath>
+
             <!-- Add "Pay on Terminal" button to invoice header -->
             <xpath expr="//button[@name='action_register_payment']" position="after">
                 <button name="action_pay_on_terminal"
@@ -24,6 +50,49 @@
                        string="JustiFi Payment Options"
                        widget="radio"
                        invisible="move_type not in ('out_invoice', 'out_refund')"/>
+            </xpath>
+
+            <!-- Add a collapsed "JustiFi Dispute" group in Other Info for audit trail -->
+            <xpath expr="//page[@id='other_tab']" position="inside">
+                <group string="JustiFi Dispute"
+                       invisible="justifi_dispute_state == 'none'"
+                       groups="account.group_account_invoice">
+                    <field name="justifi_dispute_state" readonly="1"/>
+                    <field name="justifi_dispute_id" readonly="1"/>
+                    <field name="justifi_dispute_reason" readonly="1"/>
+                </group>
+            </xpath>
+        </field>
+    </record>
+
+    <!-- Add "Disputed" filter + grouping to invoice list -->
+    <record id="view_invoice_tree_justifi" model="ir.ui.view">
+        <field name="name">account.move.list.justifi</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_invoice_tree"/>
+        <field name="arch" type="xml">
+            <xpath expr="//list" position="inside">
+                <field name="justifi_dispute_state"
+                       optional="hide"
+                       decoration-warning="justifi_dispute_state == 'open'"
+                       decoration-danger="justifi_dispute_state == 'lost'"/>
+            </xpath>
+        </field>
+    </record>
+
+    <record id="view_account_invoice_filter_justifi" model="ir.ui.view">
+        <field name="name">account.invoice.search.justifi</field>
+        <field name="model">account.move</field>
+        <field name="inherit_id" ref="account.view_account_invoice_filter"/>
+        <field name="arch" type="xml">
+            <xpath expr="//filter[@name='late']" position="after">
+                <separator/>
+                <filter string="Disputed (Open)"
+                        name="justifi_dispute_open"
+                        domain="[('justifi_dispute_state', '=', 'open')]"/>
+                <filter string="Payment Reversed"
+                        name="justifi_dispute_lost"
+                        domain="[('justifi_dispute_state', '=', 'lost')]"/>
             </xpath>
         </field>
     </record>
