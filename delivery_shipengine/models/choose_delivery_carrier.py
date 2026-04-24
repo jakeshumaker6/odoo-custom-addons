@@ -1,40 +1,46 @@
 # -*- coding: utf-8 -*-
-from odoo import api, fields, models
+import logging
+
+from odoo import models
+from odoo.exceptions import UserError
+
+_logger = logging.getLogger(__name__)
 
 
 class ChooseDeliveryCarrier(models.TransientModel):
     _inherit = 'choose.delivery.carrier'
 
-    # True only when display_price / delivery_price reflect a successful rate
-    # fetch for the CURRENT total_weight. Flipped to False whenever the user
-    # changes weight or carrier; flipped back to True after _get_delivery_rate
-    # returns a non-error response.
-    #
-    # Consumed by the inherited form view to:
-    #   - hide display_price + its label until a fresh rate is available
-    #   - hide the Add button until a fresh rate is available
-    #
-    # Both gates matter: even if the client briefly flashes a stale price
-    # during the act_window dialog reopen, the Add button is simultaneously
-    # hidden, so the user physically cannot commit a stale rate to the SO.
-    rate_is_current = fields.Boolean(default=False)
+    def button_confirm(self):
+        """Re-fetch the rate for the CURRENT total_weight before committing
+        the delivery line to the sale order. Guards against committing a
+        stale rate that can briefly linger on the wizard during the
+        act_window dialog reopen after Get rate.
 
-    @api.onchange('carrier_id', 'total_weight')
-    def _onchange_carrier_id(self):
-        res = super()._onchange_carrier_id()
-        # Base method already zeros display_price + delivery_price for API
-        # carriers in its else branch; we add the staleness flag so the view
-        # has one clear signal to gate both the price and the Add button.
+        User-visible scenario this prevents:
+          1. User sets weight=10 lb, clicks Get rate -> sees $6.20
+          2. User changes weight to 20 lb (price hides via 1.4.0 fix)
+          3. User clicks Get rate; during the ~3s API roundtrip the old
+             $6.20 briefly reappears in the refreshed dialog
+          4. User clicks Add during that flash
+          -> without this guard, $6.20 gets written to the SO despite
+             the user having typed 20 lb
+
+        By re-running _get_delivery_rate here we guarantee display_price
+        and delivery_price reflect the total_weight value that is live on
+        the wizard at the moment Add is clicked. One extra API call on
+        confirm; no UI changes; no new fields.
+
+        Only fires for API-based carriers (fixed / base_on_rule compute
+        synchronously on onchange and can never be stale).
+        """
         if self.delivery_type not in ('fixed', 'base_on_rule'):
-            self.rate_is_current = False
-        else:
-            # Fixed / base_on_rule carriers compute synchronously; their rate
-            # is always current after onchange completes.
-            self.rate_is_current = True
-        return res
-
-    def _get_delivery_rate(self):
-        vals = super()._get_delivery_rate()
-        if not vals.get('error_message'):
-            self.rate_is_current = True
-        return vals
+            vals = self._get_delivery_rate()
+            if vals.get('error_message'):
+                raise UserError(vals['error_message'])
+            _logger.info(
+                'choose.delivery.carrier.button_confirm: refreshed rate for '
+                'order %s carrier %s weight %.2f -> price %.2f',
+                self.order_id.name, self.carrier_id.name,
+                self.total_weight, self.delivery_price,
+            )
+        return super().button_confirm()
