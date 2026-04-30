@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<odoo>
+    <data noupdate="0">
+
+        <!--
+            Override stock invoice and credit-note email templates so the From
+            address always resolves to the company email (finance@s40s.com),
+            ignoring the Salesperson and the sending user.
+
+            Stock priority was:
+                invoice_user_id.email_formatted
+                or company_id.email_formatted
+                or user.email_formatted
+        -->
+
+        <record id="account.email_template_edi_invoice" model="mail.template">
+            <field name="email_from">{{ object.company_id.email_formatted }}</field>
+        </record>
+
+        <record id="account.email_template_edi_credit_note" model="mail.template">
+            <field name="email_from">{{ object.company_id.email_formatted }}</field>
+        </record>
+
+    </data>
+</odoo>
