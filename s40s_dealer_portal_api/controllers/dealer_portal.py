@@ -78,12 +78,10 @@ class DealerPortalAPI(http.Controller):
         )
 
         featured = Product.search_read(
-            [('active', '=', True), ('sale_ok', '=', True), ('is_published', '=', True)],
-            ['id', 'name', 'list_price', 'image_1024'],
+            [('active', '=', True), ('sale_ok', '=', True)],
+            ['id', 'name', 'list_price'],
             limit=4, order='create_date desc',
         )
-        for p in featured:
-            p.pop('image_1024', None)
 
         return {
             'partner': {'id': partner.id, 'name': partner.name},
